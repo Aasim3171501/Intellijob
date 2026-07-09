@@ -1,0 +1,13 @@
+# Prerequisites
+intellijob-backend/venv/
+*.pyc
+__pycache__/
+db.sqlite3
+
+# Frontend
+intellijob-frontend/node_modules/
+intellijob-frontend/dist/
+
+# Env & OS
+.env
+.DS_Store
