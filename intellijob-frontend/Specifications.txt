@@ -1,0 +1,95 @@
+# Comprehensive System Architecture & Engineering Specification: IntelliJob
+
+## 1. Executive Summary & Objective
+IntelliJob is a decoupled, full-stack career analytics platform built for an MSc IT+ dissertation at the University of Glasgow. It shifts away from generic live web scrapers to act as a strategic, offline-first career advisor. 
+
+The system:
+1. Deterministically parses candidate PDF resumes.
+2. Tokenizes technical skills using a custom NLP pipeline.
+3. Computes high-dimensional embeddings and executes sub-50ms cosine similarity searches against a static, uncurated, pre-vectorized research dataset of UK software engineering job specifications stored in PostgreSQL (`pgvector`).
+4. Uses a local Retrieval-Augmented Generation (RAG) orchestration loop (LangChain + Ollama) to synthesize context-grounded, actionable skill-gap roadmaps.
+
+---
+
+## 2. Monorepo Directory Layout
+The repository is structured as a single monorepo tracking two primary application tiers:
+
+```text
+intellijob/ (Root)
+├── .gitignore
+├── .gitlab-ci.yml              <-- ESLint & Ruff linting pipeline
+├── README.md
+├── intellijob-backend/         <-- Django REST Framework API + Python environment
+│   ├── venv/
+│   ├── requirements.txt
+│   ├── manage.py
+│   ├── core/                   <-- Main Django configuration & settings
+│   └── api/                    <-- Custom application logic, models, & endpoints
+└── intellijob-frontend/        <-- React.js Single-Page Application (SPA)
+    ├── package.json
+    ├── tsconfig.json
+    ├── vite.config.ts
+    └── src/
+
+3. Technology Stack & Multi-Tier Architecture
+Tier 1: Frontend (Client-Side Presentation)
+Framework: React.js (bootstrapped via Vite) + TypeScript.
+
+Styling & UI: Tailwind CSS + ShadCN UI components.
+
+State & API Management: Axios / Fetch API targeting Django endpoints.
+
+Tier 2: Backend API (Application Logic & Pipelines)
+Framework: Django REST Framework (DRF) running on Python 3.11+.
+
+PDF Parsing: PyMuPDF (specifically pymupdf4llm for clean Markdown extraction).
+
+NLP & NER: spaCy (using en_core_web_sm / md coupled with a custom EntityRuler to extract technical entities labeled as SKILL).
+
+Vector Embeddings: SentenceTransformers (all-MiniLM-L6-v2 producing 384-dimensional vectors).
+
+LLM Orchestration: LangChain piping bounded context to a local Ollama model instance (e.g., Llama 3 / Mistral).
+
+Tier 3: Database & Vector Search Engine
+Database: PostgreSQL.
+
+Extension: pgvector enabling native vector types and vector distance operators (<=> for cosine distance).
+
+Indexing Strategy: Pre-computed Hierarchical Navigable Small World (HNSW) graph index built over the job specification embedding column to guarantee fast, sub-50ms query traversals.
+
+4. End-to-End Data Pipeline Flow
+[PyMuPDF Direct Extraction] ──> [spaCy EntityRuler NER] ──> [SentenceTransformers Vectorizer] ──> [PostgreSQL HNSW Cosine Lookup] ──> [LangChain / Ollama RAG Synthesis]
+Phase A: Offline Preparation (Executed Once)
+Import: A static, frozen research dataset of thousands of uncurated UK tech job ads (e.g., Kaggle software engineering dataset) is seeded into PostgreSQL.
+
+Offline Embedding: A background Python script runs the raw job text through SentenceTransformers (all-MiniLM-L6-v2) to populate the pgvector column.
+
+Index Construction: An HNSW graph index is instantiated over the vector column for accelerated nearest-neighbor traversal.
+
+Phase B: Real-Time User Processing Loop (Runtime)
+User Action: Candidate uploads a PDF CV and inputs a target job title via the React dashboard.
+
+Text Extraction: Django intercepts the binary file and extracts clean text using PyMuPDF.
+
+Skill Tokenization: spaCy extracts language, framework, and infrastructure tokens (e.g., Django, React, Docker, PostgreSQL).
+
+Vector Matchmaking: The parsed user skill vector is queried against the pre-vectorized job dataset in PostgreSQL using pgvector cosine similarity (<=>).
+
+Context Retrieval: The top 3–5 most relevant job specifications are retrieved in sub-50ms.
+
+RAG Roadmapping: LangChain injects the candidate's skills and the retrieved job specs into a bounded prompt template. Ollama runs local inference to generate a structured, Markdown-formatted educational roadmap highlighting missing competency gaps.
+
+5. Implementation Instructions for Pi Agent
+As you work within this repository, adhere strictly to the following standards:
+
+Monorepo Integrity: Keep backend Python/Django files within intellijob-backend/ and frontend React/TypeScript files within intellijob-frontend/.
+
+Code Quality & Linting:
+
+Python backend code must comply with Ruff linting rules.
+
+React/TypeScript code must comply with ESLint standards defined in the project root.
+
+Local & Ethical Execution: Do not introduce cloud API dependencies (e.g., OpenAI or Baidu cloud APIs) for PDF parsing or NLP. All processing must remain 100% local (spaCy, PyMuPDF, SentenceTransformers, Ollama) to maintain strict GDPR compliance.
+
+Database Operations: Ensure any Django ORM models using pgvector utilize correct migration types for PostgreSQL vector columns.

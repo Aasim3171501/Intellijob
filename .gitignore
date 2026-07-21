@@ -1,4 +1,5 @@
 # Prerequisites
+venv/
 intellijob-backend/venv/
 *.pyc
 __pycache__/

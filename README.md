@@ -1,95 +1,212 @@
 # IntelliJob
 
+> A decoupled, offline-first career analytics platform that turns a candidate's PDF résumé into a personalised, AI-generated skill-gap roadmap — built for the MSc IT+ dissertation at the **University of Glasgow**.
 
+IntelliJob shifts away from generic live job-board scrapers. It acts as a **deterministic, strategic career advisor**: it parses résumés, extracts skills, performs sub-50 ms semantic vector search against a frozen UK software-engineering job dataset, and synthesises a context-grounded learning plan via a **local** Retrieval-Augmented Generation (RAG) pipeline. **No candidate data ever leaves the machine.**
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## ✨ Features
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- 📄 **Deterministic PDF résumé parsing** via `pymupdf4llm` (clean Markdown extraction, layout-aware).
+- 🧠 **Custom NLP skill tokenisation** using `spaCy` + a hand-tuned `EntityRuler` for technical entities (`SKILL`).
+- 🔢 **384-dim semantic embeddings** with `SentenceTransformers` (`all-MiniLM-L6-v2`).
+- ⚡ **Sub-50 ms vector similarity search** against PostgreSQL using the `pgvector` extension and a pre-computed **HNSW** graph index.
+- 🗺️ **Local RAG roadmapping** with `LangChain` orchestrating a fully local `Ollama` model (Llama 3 / Mistral) — produces a Markdown skill-gap plan citing the top matched job specifications.
+- 🔒 **100 % local processing** — no OpenAI, no cloud APIs, GDPR-friendly by design.
+- 🧱 **Decoupled architecture** — React SPA + Django REST Framework API + PostgreSQL.
 
-## Add your files
+---
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## 🏗️ Architecture
+
+A three-tier system:
 
 ```
-cd existing_repo
-git remote add origin https://stgit.dcs.gla.ac.uk/msc-project-for-information-technology/2025/it-project-3171501k/intellijob.git
-git branch -M main
-git push -uf origin main
+┌─────────────────────────────────────────────────────────────────┐
+│  Tier 1 — React SPA (Vite + TS + Tailwind + ShadCN)            │
+│            Axios → Django endpoints                             │
+└─────────────────────────────────────────────────────────────────┘
+                              │  HTTP / JSON
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Tier 2 — Django REST Framework (Python 3.11+)                 │
+│   PyMuPDF ─▶ spaCy NER ─▶ SentenceTransformers ─▶ LangChain    │
+│                                       (orchestration)           │
+└─────────────────────────────────────────────────────────────────┘
+                              │  pgvector SQL
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Tier 3 — PostgreSQL + pgvector + HNSW index                   │
+│            Pre-vectorised static UK job-spec dataset            │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Integrate with your tools
+### End-to-End Pipeline
 
-- [ ] [Set up project integrations](https://stgit.dcs.gla.ac.uk/msc-project-for-information-technology/2025/it-project-3171501k/intellijob/-/settings/integrations)
+1. **Offline preparation (one-time)**
+   - A static, uncurated research dataset of UK software-engineering job ads (e.g. a Kaggle corpus) is seeded into PostgreSQL.
+   - A background script embeds every job spec with `all-MiniLM-L6-v2`.
+   - An HNSW graph index is built over the embedding column.
 
-## Collaborate with your team
+2. **Real-time user loop (per request)**
+   - User uploads a PDF CV and a target job title in the React dashboard.
+   - Django extracts clean text with PyMuPDF.
+   - spaCy extracts skill tokens (Django, React, Docker, PostgreSQL, …).
+   - The user's skill vector queries PostgreSQL via `pgvector` cosine distance — top 3–5 specs returned in < 50 ms.
+   - LangChain injects the candidate's skills + the matched specs into a bounded prompt.
+   - Ollama (local) generates a Markdown roadmap highlighting missing competencies.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+---
 
-## Test and Deploy
+## 🗂️ Monorepo Layout
 
-Use the built-in continuous integration in GitLab.
+```
+intellijob/
+├── .gitignore
+├── .gitlab-ci.yml          # ESLint + Ruff lint pipeline
+├── README.md
+├── intellijob-backend/     # Django REST Framework API
+│   ├── venv/
+│   ├── requirements.txt
+│   ├── manage.py
+│   ├── core/               # Django project (settings, urls, asgi/wsgi)
+│   └── api/                # Application logic: models, views, endpoints
+└── intellijob-frontend/    # React + TypeScript SPA (Vite)
+    ├── package.json
+    ├── tsconfig.json
+    ├── vite.config.ts
+    └── src/
+```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+---
 
-***
+## 🚀 Getting Started
 
-# Editing this README
+### Prerequisites
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+| Tool                | Version           | Notes                                               |
+| ------------------- | ----------------- | --------------------------------------------------- |
+| Python              | 3.11+             | Backend runtime                                     |
+| Node.js             | 20 LTS or newer   | Frontend runtime                                    |
+| PostgreSQL          | 15+               | With the `pgvector` extension installed             |
+| Ollama              | latest            | Local LLM runtime (`ollama pull llama3` etc.)       |
 
-## Suggestions for a good README
+### 1. Clone
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```bash
+git clone https://stgit.dcs.gla.ac.uk/msc-project-for-information-technology/2025/it-project-3171501k/intellijob.git
+cd intellijob
+```
 
-## Name
-Choose a self-explaining name for your project.
+### 2. Backend
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```bash
+cd intellijob-backend
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+# Create and activate virtualenv
+python -m venv venv
+source venv/Scripts/activate            # Git Bash
+# venv\Scripts\activate.bat            # cmd
+# venv\Scripts\Activate.ps1            # PowerShell
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+# Install dependencies
+pip install -r requirements.txt
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# Download the spaCy English model
+python -m spacy download en_core_web_sm
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Apply migrations
+python manage.py migrate
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# (One-time) seed the job dataset and build the HNSW index
+python manage.py seed_jobs --source data/jobs.csv
+python manage.py build_hnsw_index
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Run the dev server
+python manage.py runserver
+```
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### 3. Frontend
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+```bash
+cd intellijob-frontend
+npm install
+npm run dev          # http://localhost:5173
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### 4. Local LLM (Ollama)
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+```bash
+# Install: https://ollama.com/download
+ollama serve
+ollama pull llama3
+```
 
-## License
-For open source projects, say how it is licensed.
+---
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
-# Final_Project
-Final dissertation/ project for glasgow uni
+## 🧪 Development
+
+### Linting (per project spec, Section 5)
+
+```bash
+# Backend — Ruff
+cd intellijob-backend
+ruff check .
+ruff format .
+
+# Frontend — ESLint
+cd intellijob-frontend
+npm run lint
+```
+
+### Tests
+
+```bash
+# Backend
+cd intellijob-backend
+python manage.py test
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer        | Technology                                                              |
+| ------------ | ----------------------------------------------------------------------- |
+| Frontend     | React 19, TypeScript, Vite, Tailwind CSS, ShadCN UI, Axios               |
+| Backend      | Django 5.2, Django REST Framework                                       |
+| PDF parsing  | PyMuPDF (`pymupdf4llm`)                                                 |
+| NLP / NER    | spaCy 3.8 + custom `EntityRuler`                                        |
+| Embeddings   | SentenceTransformers `all-MiniLM-L6-v2` (384-dim)                       |
+| Vector DB    | PostgreSQL 15+, `pgvector` extension, HNSW index                        |
+| RAG / LLM    | LangChain + LangGraph, local Ollama (Llama 3 / Mistral)                 |
+| Linting      | Ruff (Python), ESLint (TypeScript)                                      |
+| CI / CD      | GitLab CI                                                               |
+
+---
+
+## 🔐 Privacy & Ethics
+
+All résumé parsing, skill extraction, embedding, vector search, and LLM inference happen **locally** on the user's machine. No candidate data, embeddings, or prompts are transmitted to any third-party API. This is a deliberate design choice made to satisfy **GDPR data-minimisation** requirements and to avoid vendor lock-in for the dissertation's evaluation.
+
+---
+
+## 📚 Dissertation Context
+
+- **Programme:** MSc IT+ (Information Technology), University of Glasgow
+- **Repository:** `stgit.dcs.gla.ac.uk/msc-project-for-information-technology/2025/it-project-3171501k/intellijob`
+- **Project type:** Final dissertation
+- **Specification:** see [`intellijob-frontend/Specifications.txt`](intellijob-frontend/Specifications.txt)
+
+---
+
+## 📄 License
+
+TBD — see dissertation submission guidelines.
+
+---
+
+## 👤 Author
+
+MSc IT+ candidate, School of Computing Science, University of Glasgow.
