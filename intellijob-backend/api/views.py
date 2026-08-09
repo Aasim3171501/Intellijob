@@ -10,9 +10,8 @@ Phase B-2 exposes one endpoint:
         returns JSON:
             extracted_skills       -- sorted list[str] from the resume
             matches                -- list[dict] top-k matched job specs
-            roadmap                -- placeholder dict; Phase B-3 will
-                                      swap in a real LangChain + Ollama
-                                      roadmap
+            roadmap                -- SkillGapRoadmap dict from the local
+                                      RAG generator (LangChain + Ollama)
 
 The view deliberately wires through the existing service modules —
 no business logic lives here. This keeps it small, testable, and
@@ -29,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.services.matcher import match_from_text
+from api.services.roadmap_generator import generate_roadmap
 from api.services.skill_extractor import extract_skills_from_pdf
 
 log = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ class AnalyzeView(APIView):
         try:
             pdf_bytes = resume_file.read()
             skills = extract_skills_from_pdf(pdf_bytes)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.exception("PDF parse / skill extraction failed")
             return Response(
                 {"error": f"Could not parse PDF: {e!s}"},
@@ -81,28 +81,23 @@ class AnalyzeView(APIView):
                 {"error": str(e)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.exception("Matching failed")
             return Response(
                 {"error": f"Matching failed: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        # 3. Placeholder roadmap. Phase B-3 will replace this with a
-        #    real LangChain + Ollama roadmap. The shape is stable so
-        #    the frontend can already render against it.
-        roadmap = {
-            "status": "pending",
-            "note": "Roadmap generation is planned for Phase B-3 "
-                    "(LangChain + Ollama).",
-            "extracted_skill_count": len(skills),
-        }
+        # 3. Local RAG roadmap. generate_roadmap never raises: if
+        #    Ollama is offline / unparseable it returns a deterministic
+        #    fallback roadmap with status="fallback".
+        roadmap = generate_roadmap(skills, matches)
 
         return Response(
             {
                 "extracted_skills": skills,
                 "matches": [m.to_dict() for m in matches],
-                "roadmap": roadmap,
+                "roadmap": roadmap.to_dict(),
             },
             status=status.HTTP_200_OK,
         )

@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import csv
 import hashlib
-import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,7 +33,6 @@ from rest_framework.test import APIClient
 
 from api.services.embedder import EMBEDDING_DIM
 from api.services.jobs_loader import CSV_COLUMNS
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures
@@ -175,9 +173,27 @@ class AnalyzeViewTests(TestCase):
         )
         self._pymupdf_patch.start()
 
+        # Patch the RAG roadmap service so the view never touches Ollama.
+        # The service itself is covered by test_roadmap_generator.
+        from api.services.roadmap_generator import SkillGapRoadmap
+
+        self._roadmap_patch = mock.patch(
+            "api.views.generate_roadmap",
+            return_value=SkillGapRoadmap(
+                status="generated",
+                skill_gaps=["Kubernetes", "Terraform"],
+                learning_steps=["Learn Kubernetes", "Learn Terraform"],
+                estimated_timeline_weeks={"Phase 1 - Foundations": "2-3 weeks"},
+                matched_jobs=["Engineer-0"],
+                extracted_skill_count=5,
+            ),
+        )
+        self._roadmap_mock = self._roadmap_patch.start()
+
         self.client = APIClient()
 
     def tearDown(self) -> None:
+        self._roadmap_patch.stop()
         self._pymupdf_patch.stop()
         self._st_patch.stop()
         self._matcher_patch.stop()
@@ -245,7 +261,7 @@ class AnalyzeViewTests(TestCase):
         self.assertIn("similarity_score", first)
         self.assertIn("description_excerpt", first)
 
-    def test_post_roadmap_is_placeholder(self) -> None:
+    def test_post_roadmap_has_schema_shape(self) -> None:
         resp = self.client.post(
             "/api/analyze/",
             data={
@@ -255,11 +271,35 @@ class AnalyzeViewTests(TestCase):
             format="multipart",
         )
         body = resp.json()
-        self.assertEqual(body["roadmap"]["status"], "pending")
-        self.assertEqual(
-            body["roadmap"]["extracted_skill_count"],
-            len(body["extracted_skills"]),
+        roadmap = body["roadmap"]
+        self.assertIsInstance(roadmap, dict)
+        self.assertIn("status", roadmap)
+        self.assertIn("skill_gaps", roadmap)
+        self.assertIn("learning_steps", roadmap)
+        self.assertIn("estimated_timeline_weeks", roadmap)
+        self.assertEqual(roadmap["status"], "generated")
+        self.assertIn("Kubernetes", roadmap["skill_gaps"])
+
+    def test_post_roadmap_delegates_to_service_with_skills_and_matches(self) -> None:
+        resp = self.client.post(
+            "/api/analyze/",
+            data={
+                "file": _uploaded_file(self.tiny_pdf, "resume.pdf"),
+                "target_title": "Senior Backend Engineer",
+            },
+            format="multipart",
         )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(self._roadmap_mock.called)
+        # generate_roadmap(skills, matches) — skills first, matches second.
+        args = self._roadmap_mock.call_args
+        self.assertEqual(len(args.args), 2)
+        skills, matches = args.args
+        self.assertIn("Python", skills)
+        self.assertIn("Django", skills)
+        self.assertIsInstance(matches, list)
+        self.assertGreater(len(matches), 0)
+        self.assertTrue(matches[0].title.startswith("Engineer-"))
 
     # ----------------------------------------------------------------------- #
     # Validation errors
@@ -366,7 +406,6 @@ class _FakeUpload:
     Django's test client wraps file-like objects in SimpleUploadedFile;
     we use that path so request.FILES.get() works.
     """
-    pass
 
 
 def _uploaded_file(data: bytes, name: str):
