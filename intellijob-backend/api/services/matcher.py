@@ -40,10 +40,10 @@ Public API:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
 
@@ -233,6 +233,58 @@ def embed_query(
 # --------------------------------------------------------------------------- #
 
 
+def _result_from_position(
+    index: JobIndex,
+    position: int,
+    score: float,
+) -> MatchResult | None:
+    """Build a MatchResult for ``position`` in the index, or ``None`` when
+    the job id is missing from the CSV (defensive skip). Shared by
+    :func:`match_jobs` and :func:`matches_for_positions`."""
+    job_id = str(index.ids[position])
+    row = index.rows.get(job_id)
+    if row is None:
+        return None
+    excerpt = (row.description or "").strip()
+    if len(excerpt) > EXCERPT_CHARS:
+        excerpt = excerpt[:EXCERPT_CHARS].rstrip() + "…"
+    return MatchResult(
+        id=job_id,
+        title=row.title,
+        company_display_name=row.company_display_name,
+        location_display=row.location_display,
+        similarity=score,
+        description_excerpt=excerpt,
+    )
+
+
+def matches_for_positions(
+    index: JobIndex,
+    positions: np.ndarray,
+    scores: np.ndarray,
+    *,
+    top_k: int = 5,
+) -> list[MatchResult]:
+    """Rank a *subset* of the job index by similarity and return the
+    top-k as MatchResults.
+
+    ``positions`` and ``scores`` are parallel arrays: ``scores[i]`` is
+    the similarity of job ``positions[i]``. This is the building block
+    the career-pathway engine uses to rank just the jobs that belong to
+    one pathway. Rows whose id is missing from the CSV are skipped.
+    """
+    if top_k <= 0 or positions.size == 0:
+        return []
+
+    order = np.argsort(-scores)[: min(top_k, positions.size)]
+    out: list[MatchResult] = []
+    for j in order:
+        r = _result_from_position(index, int(positions[j]), float(scores[j]))
+        if r is not None:
+            out.append(r)
+    return out
+
+
 def match_jobs(
     query_vec: np.ndarray,
     *,
@@ -278,25 +330,9 @@ def match_jobs(
 
     out: list[MatchResult] = []
     for i in top_idx:
-        job_id = str(index.ids[i])
-        score = float(scores[i])
-        row = index.rows.get(job_id)
-        if row is None:
-            # Defensive — npz id not in CSV. Skip rather than 500.
-            continue
-        excerpt = (row.description or "").strip()
-        if len(excerpt) > EXCERPT_CHARS:
-            excerpt = excerpt[:EXCERPT_CHARS].rstrip() + "…"
-        out.append(
-            MatchResult(
-                id=job_id,
-                title=row.title,
-                company_display_name=row.company_display_name,
-                location_display=row.location_display,
-                similarity=score,
-                description_excerpt=excerpt,
-            )
-        )
+        r = _result_from_position(index, int(i), float(scores[i]))
+        if r is not None:
+            out.append(r)
     return out
 
 
@@ -315,9 +351,10 @@ __all__ = [
     "EXCERPT_CHARS",
     "JobIndex",
     "MatchResult",
-    "load_job_index",
-    "reset_job_index_cache",
     "embed_query",
-    "match_jobs",
+    "load_job_index",
     "match_from_text",
+    "match_jobs",
+    "matches_for_positions",
+    "reset_job_index_cache",
 ]

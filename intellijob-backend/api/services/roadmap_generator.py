@@ -32,7 +32,8 @@ Public API:
     DEFAULT_MODEL           - str, local Ollama model tag
     MAX_OUTPUT_TOKENS       - int, num_predict bound for the generator
     ROADMAP_PROMPT_TEMPLATE - str, LangChain PromptTemplate text
-    SkillGapRoadmap         - pydantic output schema
+    CareerPhase             - pydantic phase schema for the trajectory
+    SkillGapRoadmap         - pydantic output schema (incl. career_trajectory)
     build_prompt()          - str, the bounded prompt for a request
     parse_roadmap_json()    - dict | None, lenient JSON extraction
     generate_roadmap()      - SkillGapRoadmap, primary entry point
@@ -60,11 +61,12 @@ log = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 
 #: Local model tag. Pull it once with:  ollama pull llama3.2
-DEFAULT_MODEL: str = "llama3.2"
+DEFAULT_MODEL: str = "qwen2.5:7b"
 
 #: Upper bound on generated tokens — keeps a single request bounded and
-#: fast on CPU. 600 tokens is comfortably enough for a roadmap JSON blob.
-MAX_OUTPUT_TOKENS: int = 600
+#: fast on CPU. 900 tokens is comfortable for a strategic, multi-phase
+#: career trajectory JSON blob.
+MAX_OUTPUT_TOKENS: int = 900
 
 #: Sampling temperature. Low = more deterministic, which suits a
 #: data-grounded "roadmap" task better than creative writing.
@@ -79,18 +81,32 @@ CONTEXT_JOBS_LIMIT: int = 5
 # --------------------------------------------------------------------------- #
 
 
+class CareerPhase(BaseModel):
+    """One phase of a long-term strategic career trajectory."""
+
+    name: str
+    focus: str
+    objectives: list[str] = Field(default_factory=list)
+
+
 class SkillGapRoadmap(BaseModel):
     """Structured roadmap returned by the RAG generator.
 
-    The three user-facing fields are produced by the LLM. The rest are
-    filled in by :func:`generate_roadmap` so the API response carries
-    provenance (matched jobs) and a machine-readable status flag.
+    ``career_trajectory`` is the strategic, multi-phase career plan
+    (e.g. Phase 1 - Entry-Level Readiness, Phase 2 - Mid-Level
+    Progression, Phase 3 - Senior Trajectory). The legacy flat fields
+    (``skill_gaps`` / ``learning_steps`` / ``estimated_timeline_weeks``)
+    are kept so existing consumers keep working, and are also produced by
+    the LLM. The rest are filled in by :func:`generate_roadmap` so the
+    API response carries provenance (matched jobs) and a machine-readable
+    status flag.
     """
 
     status: str = Field(default="generated", description="generated | fallback")
     skill_gaps: list[str] = Field(default_factory=list)
     learning_steps: list[str] = Field(default_factory=list)
     estimated_timeline_weeks: dict[str, str] = Field(default_factory=dict)
+    career_trajectory: list[CareerPhase] = Field(default_factory=list)
     matched_jobs: list[str] = Field(default_factory=list)
     extracted_skill_count: int = Field(default=0)
 
@@ -104,9 +120,11 @@ class SkillGapRoadmap(BaseModel):
 
 #: LangChain-style template. Bounded: candidate skills + top-k matched
 #: jobs only. Instructs strict JSON with exactly the schema's keys.
-ROADMAP_PROMPT_TEMPLATE: str = """You are IntelliJob, a strategic, local career advisor.
+ROADMAP_PROMPT_TEMPLATE: str = """You are IntelliJob, a strategic, long-term local career advisor.
 Your job is to analyse the candidate's existing skills against the requirements of
-matched UK job specifications and produce an actionable skill-gap learning roadmap.
+matched UK job specifications and produce a STRATEGIC career trajectory — a multi-phase
+plan that spans entry-level readiness through to a senior trajectory — rather than just a
+short list of task-level fixes.
 
 CANDIDATE SKILLS (already extracted from the candidate's CV):
 {skills}
@@ -114,13 +132,23 @@ CANDIDATE SKILLS (already extracted from the candidate's CV):
 TOP MATCHED JOB SPECIFICATIONS (title | company | similarity | description excerpt):
 {jobs}
 
-Produce a skill-gap roadmap as STRICT JSON with EXACTLY these keys:
+Produce a career roadmap as STRICT JSON with EXACTLY these keys:
 - "skill_gaps": list of strings. Missing/weak technical competencies the candidate
   needs to add, each phrased as a concrete technology or capability.
 - "learning_steps": list of strings. Step-by-step, actionable learning objectives
-  (ordered) that close the gaps above.
+  (ordered) that close the most urgent gaps.
 - "estimated_timeline_weeks": object mapping milestone phase name to a weeks span,
-  e.g. {{"Phase 1 - Foundation": "2-3 weeks"}}.
+  e.g. {{"Phase 1 - Foundations": "2-3 weeks"}}.
+- "career_trajectory": array of EXACTLY 3 phase objects, following a strategic
+  long-term trajectory:
+    Phase 1 - "Entry-Level Readiness": build the baseline skills to become employable
+               at entry level.
+    Phase 2 - "Mid-Level Progression": deepen and apply the skills in real projects,
+               with increasing ownership and scope.
+    Phase 3 - "Senior Trajectory": lead work, mentoring, architecture and ambiguity.
+  Each phase object has the shape:
+      {{"name": "<phase name>", "focus": "<one-sentence focus>", "objectives": ["<objective>", ...]}}
+  Objective strings should be concrete, measurable and career-relevant.
 
 Return ONLY the JSON object. No markdown fences, no commentary, no extra keys."""
 
@@ -190,10 +218,45 @@ def parse_roadmap_json(raw: str) -> dict[str, Any] | None:
 # --------------------------------------------------------------------------- #
 
 _TIMELINE_FALLBACK: dict[str, str] = {
-    "Phase 1 - Foundations": "weeks 1-2",
-    "Phase 2 - Hands-on projects": "weeks 3-5",
-    "Phase 3 - Job-ready practice": "weeks 6-8",
+    "Phase 1 - Entry-Level Readiness": "months 1-3",
+    "Phase 2 - Mid-Level Progression": "months 3-9",
+    "Phase 3 - Senior Trajectory": "months 9-24",
 }
+
+
+def _fallback_trajectory(
+    gaps: Sequence[str],
+    endgame_objectives: Sequence[str] = (
+        "Lead end-to-end delivery of a cross-team initiative",
+        "Mentor junior engineers and set technical standards",
+        "Own architectural and hiring decisions",
+    ),
+) -> list[CareerPhase]:
+    """Deterministic three-phase strategic trajectory derived from the
+    detected skill gaps. Used when the LLM is unavailable."""
+    objectives = [g for g in (gaps or []) if g]
+    return [
+        CareerPhase(
+            name="Phase 1 - Entry-Level Readiness",
+            focus="Build the baseline competencies the matched roles demand.",
+            objectives=(
+                list(objectives[:3])
+                or ["Master the core language/stack of the target roles."]
+            ),
+        ),
+        CareerPhase(
+            name="Phase 2 - Mid-Level Progression",
+            focus="Apply the new skills in real, portfolio-grade projects.",
+            objectives=[
+                f"Ship a portfolio project using {o}." for o in (objectives[:3] or ["your core stack"])
+            ],
+        ),
+        CareerPhase(
+            name="Phase 3 - Senior Trajectory",
+            focus="Move from executing to leading: ownership, mentoring, architecture.",
+            objectives=list(endgame_objectives),
+        ),
+    ]
 
 
 def _detect_required_skills(matches: Sequence[MatchResult]) -> list[str]:
@@ -243,6 +306,7 @@ def _fallback_roadmap(
         skill_gaps=gaps,
         learning_steps=steps,
         estimated_timeline_weeks=dict(_TIMELINE_FALLBACK),
+        career_trajectory=_fallback_trajectory(gaps),
         matched_jobs=[m.title for m in matches],
         extracted_skill_count=len(skills or []),
     )
@@ -344,6 +408,7 @@ __all__ = [
     "MAX_OUTPUT_TOKENS",
     "ROADMAP_PROMPT_TEMPLATE",
     "TEMPERATURE",
+    "CareerPhase",
     "SkillGapRoadmap",
     "build_prompt",
     "generate_roadmap",

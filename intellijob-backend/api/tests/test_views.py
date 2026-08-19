@@ -223,6 +223,9 @@ class AnalyzeViewTests(TestCase):
         self.assertIsInstance(body["extracted_skills"], list)
         self.assertIsInstance(body["matches"], list)
         self.assertIsInstance(body["roadmap"], dict)
+        # Targeted mode: title given -> no career_pathways.
+        self.assertEqual(body["career_mode"], "targeted")
+        self.assertEqual(body["career_pathways"], [])
 
     def test_post_extracts_real_skills(self) -> None:
         resp = self.client.post(
@@ -314,16 +317,33 @@ class AnalyzeViewTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("error", resp.json())
 
-    def test_missing_target_title_returns_400(self) -> None:
+    def test_missing_target_title_uses_discovery_mode(self) -> None:
         resp = self.client.post(
             "/api/analyze/",
             data={"file": _uploaded_file(self.tiny_pdf, "r.pdf")},
             format="multipart",
         )
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("error", resp.json())
+        # target_title is optional: blank => career discovery mode.
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertEqual(body["career_mode"], "discovery")
+        self.assertIsInstance(body["career_pathways"], list)
+        self.assertGreaterEqual(len(body["career_pathways"]), 1)
+        # Each pathway is self-contained.
+        for pw in body["career_pathways"]:
+            self.assertIn("key", pw)
+            self.assertIn("name", pw)
+            self.assertIn("description", pw)
+            self.assertIn("similarity_score", pw)
+            self.assertIn("match_count", pw)
+            self.assertIn("matches", pw)
+            self.assertIn("roadmap", pw)
+            self.assertIsNotNone(pw["roadmap"])
+        # Top-level matches/roadmap mirror the #1 pathway.
+        self.assertEqual(body["matches"], body["career_pathways"][0]["matches"])
+        self.assertEqual(body["roadmap"], body["career_pathways"][0]["roadmap"])
 
-    def test_blank_target_title_returns_400(self) -> None:
+    def test_blank_target_title_uses_discovery_mode(self) -> None:
         resp = self.client.post(
             "/api/analyze/",
             data={
@@ -332,7 +352,72 @@ class AnalyzeViewTests(TestCase):
             },
             format="multipart",
         )
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["career_mode"], "discovery")
+
+    def test_discovery_ranks_best_fit_pathway_first(self) -> None:
+        """A resume whose query aligns with the 'embedded' pathway centroid
+        should surface Embedded Systems as the #1 recommendation."""
+        from api.services import matcher
+        from api.services.pathways import build_pathway_index
+
+        # A diverse index spanning several pathways.
+        diverse = _build_diverse_index()
+
+        self._matcher_patch.stop()
+        try:
+            self._matcher_patch = mock.patch.object(
+                matcher,
+                "load_job_index",
+                return_value=diverse,
+            )
+            self._matcher_patch.start()
+
+            # Align the query vector with the 'embedded' pathway centroid.
+            embedded_centroid = build_pathway_index(diverse).centroids["embedded"]
+            fake_arr = np.array([embedded_centroid])
+            fake_model = mock.Mock()
+            fake_model.encode = mock.Mock(return_value=fake_arr)
+            self._st_patch.stop()
+            self._st_patch = mock.patch(
+                "sentence_transformers.SentenceTransformer",
+                return_value=fake_model,
+            )
+            self._st_patch.start()
+            from api.services.matcher import _get_query_model
+            _get_query_model.cache_clear()
+
+            resp = self.client.post(
+                "/api/analyze/",
+                data={"file": _uploaded_file(self.tiny_pdf, "r.pdf")},
+                format="multipart",
+            )
+            self.assertEqual(resp.status_code, 200, resp.content)
+            body = resp.json()
+            self.assertEqual(body["career_mode"], "discovery")
+            self.assertEqual(body["career_pathways"][0]["key"], "embedded")
+            self.assertNotEqual(body["career_pathways"][0]["similarity_score"], 0.0)
+            self.assertGreater(len(body["career_pathways"][0]["matches"]), 0)
+        finally:
+            self._matcher_patch = mock.patch.object(
+                matcher,
+                "load_job_index",
+                return_value=matcher.JobIndex(
+                    ids=np.asarray(self.ids, dtype=object),
+                    vectors=np.stack(
+                        [_sha_unit_vec(f"job-{i}") for i in range(5)],
+                        axis=0,
+                    ).astype(np.float32),
+                    rows={
+                        rid: _fake_row(rid, i)
+                        for i, rid in enumerate(self.ids)
+                    },
+                    model_name="fake",
+                    schema_version=1,
+                ),
+            )
+            self._matcher_patch.start()
+            matcher.load_job_index.cache_clear()
 
     def test_pdf_parser_failure_returns_400(self) -> None:
         with mock.patch(
@@ -433,6 +518,59 @@ def _fake_row(rid: str, i: int):
         redirect_url="",
         search_query="",
         search_location="",
+    )
+
+
+_DIVERSE_TITLES: list[str] = [
+    "Embedded Software Engineer",
+    "Embedded Systems Engineer",
+    "Data Scientist",
+    "Data Analyst",
+    "DevOps Engineer",
+    "Backend Engineer",
+    "Software Engineer",
+    "Senior Software Engineer",
+    "Frontend Developer",
+]
+
+
+def _build_diverse_index():
+    """A JobIndex whose titles span several career pathways."""
+    from api.services.jobs_loader import JobRow
+    from api.services.matcher import JobIndex
+
+    ids = [f"div-{i}" for i in range(len(_DIVERSE_TITLES))]
+    vectors = np.stack(
+        [_sha_unit_vec(t) for t in _DIVERSE_TITLES],
+        axis=0,
+    ).astype(np.float32)
+    rows = {
+        rid: JobRow(
+            id=rid,
+            title=title,
+            company_display_name=f"Co-{i}",
+            location_display="London",
+            location_area="",
+            salary_min=None,
+            salary_max=None,
+            salary_is_predicted=None,
+            contract_type="",
+            contract_time="",
+            category_label="IT Jobs",
+            created="",
+            description="A role requiring Python and experience.",
+            redirect_url="",
+            search_query="",
+            search_location="",
+        )
+        for i, (rid, title) in enumerate(zip(ids, _DIVERSE_TITLES))
+    }
+    return JobIndex(
+        ids=np.asarray(ids, dtype=object),
+        vectors=vectors,
+        rows=rows,
+        model_name="fake",
+        schema_version=1,
     )
 
 
