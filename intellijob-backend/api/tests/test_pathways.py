@@ -61,6 +61,21 @@ CLASSIFY_CASES: tuple[tuple[str, str], ...] = (
     ("Gameplay Programmer", "game"),
     ("Software Engineer", "software-engineering"),
     ("Senior Software Engineer", "software-engineering"),
+    # Language-titled roles classify to backend, not the catch-all.
+    ("Python Developer", "backend"),
+    ("Golang Developer", "backend"),
+    ("C++ Developer", "backend"),
+    # "programme" is a substring of "programmer" — a plain "programmer"
+    # title must NOT be swallowed by the delivery pathway.
+    ("Frontend Programmer", "frontend"),
+    ("Python Programmer", "backend"),
+    # Delivery variants.
+    ("Program Manager", "delivery"),
+    ("Programme Manager", "delivery"),
+    # Embedded/hardware variants.
+    ("Control Systems Engineer", "embedded"),
+    # Game variants.
+    ("Graphics Programmer", "game"),
     ("", "software-engineering"),
 )
 
@@ -230,6 +245,86 @@ class MatchPathwaysTests(unittest.TestCase):
         q = self.pi.centroids["embedded"].copy()
         ranked = match_pathways(q, top_k=1, index=self.idx, pathway_index=self.pi)
         self.assertEqual(ranked[0].match_count, len(self.pi.member_positions["embedded"]))
+
+    def test_skill_aware_ranking_favours_pathway_matching_skills(self) -> None:
+        # Tiny index with two pathways whose descriptions mention disjoint
+        # skill sets, and a query perfectly aligned with 'embedded'.
+        # Passing skills that only match 'frontend' must overturn the
+        # pure-cosine order — this is what makes recommendations
+        # resume-specific instead of always the same top-k.
+        titles = [
+            "Embedded Software Engineer",  # embedded
+            "Firmware Engineer",           # embedded
+            "Frontend Developer",          # frontend
+            "React Developer",             # frontend
+        ]
+        descriptions = [
+            "Firmware, RTOS and microcontroller work.",
+            "Firmware, RTOS and microcontroller work.",
+            "Build UIs with React and TypeScript.",
+            "Build UIs with React and TypeScript.",
+        ]
+        tmp = Path(tempfile.mkdtemp(prefix="hermes-skills-"))
+        try:
+            ids = [f"id-{i}" for i in range(len(titles))]
+            vectors = np.stack([_sha_unit_vec(t) for t in titles], axis=0).astype(np.float32)
+            np.savez_compressed(
+                tmp / "jobs.npz",
+                ids=np.asarray(ids, dtype=object),
+                vectors=vectors,
+                model_name=np.asarray("fake-model"),
+                schema_version=np.asarray(1, dtype=np.int64),
+            )
+            _write_csv(tmp / "jobs.csv", [
+                {
+                    **{c: "" for c in CSV_COLUMNS if c not in ("id", "title", "description")},
+                    "id": id_,
+                    "title": title,
+                    "description": desc,
+                }
+                for id_, title, desc in zip(ids, titles, descriptions)
+            ])
+            reset_job_index_cache()
+            idx = load_job_index(str(tmp / "jobs.npz"), str(tmp / "jobs.csv"))
+            pi = build_pathway_index(idx)
+
+            # Query aligned exactly with the 'embedded' centroid.
+            q = pi.centroids["embedded"].copy()
+            ranked = match_pathways(
+                q,
+                top_k=2,
+                index=idx,
+                pathway_index=pi,
+                skills=["React", "TypeScript"],
+            )
+            self.assertEqual(ranked[0].key, "frontend")
+            self.assertEqual(sorted(ranked[0].matched_skills), ["React", "TypeScript"])
+            self.assertGreater(ranked[0].coverage, 0)
+            self.assertEqual(ranked[1].coverage, 0)
+            # The blend must lie within [0, 1] for a human-readable score.
+            self.assertGreaterEqual(ranked[0].score, 0)
+            self.assertLessEqual(ranked[0].score, 1)
+        finally:
+            import shutil
+            shutil.rmtree(tmp, ignore_errors=True)
+            reset_job_index_cache()
+
+    def test_exclude_fallback_removes_catch_all(self) -> None:
+        # A query aligned with the catch-all centroid is #1 by cosine, but
+        # discovery mode must not recommend the leftovers bucket.
+        q = self.pi.centroids[FALLBACK_PATHWAY_KEY].copy()
+        with_fallback = match_pathways(q, top_k=3, index=self.idx, pathway_index=self.pi)
+        self.assertEqual(with_fallback[0].key, FALLBACK_PATHWAY_KEY)
+
+        without = match_pathways(
+            q,
+            top_k=3,
+            index=self.idx,
+            pathway_index=self.pi,
+            exclude_fallback=True,
+        )
+        self.assertNotIn(FALLBACK_PATHWAY_KEY, {r.key for r in without})
+        self.assertEqual(len(without), 3)
 
 
 class MatchJobsInPathwayTests(unittest.TestCase):

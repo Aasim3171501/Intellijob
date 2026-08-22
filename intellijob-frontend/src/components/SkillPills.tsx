@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 interface SkillPillsProps {
   skills: string[];
   title?: string;
@@ -5,6 +7,8 @@ interface SkillPillsProps {
 }
 
 export function SkillPills({ skills, title = 'Extracted Skills', maxDisplay = 20 }: SkillPillsProps) {
+  const [expanded, setExpanded] = useState(false);
+
   if (!skills || skills.length === 0) {
     return (
       <div className="text-center py-8 text-slate-500">
@@ -13,8 +17,9 @@ export function SkillPills({ skills, title = 'Extracted Skills', maxDisplay = 20
     );
   }
 
-  const displaySkills = skills.slice(0, maxDisplay);
-  const remaining = skills.length - maxDisplay;
+  const showAll = expanded || skills.length <= maxDisplay;
+  const visibleSkills = showAll ? skills : skills.slice(0, maxDisplay);
+  const hidden = skills.length - visibleSkills.length;
 
   return (
     <div>
@@ -23,7 +28,7 @@ export function SkillPills({ skills, title = 'Extracted Skills', maxDisplay = 20
         {title} ({skills.length})
       </h3>
       <div className="flex flex-wrap gap-2">
-        {displaySkills.map((skill, index) => (
+        {visibleSkills.map((skill, index) => (
           <span
             key={`${skill}-${index}`}
             className="skill-badge"
@@ -31,10 +36,14 @@ export function SkillPills({ skills, title = 'Extracted Skills', maxDisplay = 20
             {skill}
           </span>
         ))}
-        {remaining > 0 && (
-          <span className="skill-badge bg-slate-100 text-slate-600">
-            +{remaining} more
-          </span>
+        {hidden > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="skill-badge bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+          >
+            {expanded ? 'Show less' : `+${hidden} more`}
+          </button>
         )}
       </div>
     </div>

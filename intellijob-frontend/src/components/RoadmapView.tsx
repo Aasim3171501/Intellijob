@@ -1,12 +1,20 @@
-import { AlertTriangle, Clock, TrendingUp, Target, CheckCircle, AlertCircle, Info, Flag } from 'lucide-react';
+import { AlertTriangle, TrendingUp, CheckCircle, Info, Flag, ChevronRight, PoundSterling } from 'lucide-react';
+import { useState } from 'react';
 import type { Roadmap, CareerPhase } from '@/types/api';
+import { LearningSteps } from './LearningSteps';
+import { PhaseDetailModal } from './PhaseDetailModal';
 
 interface RoadmapViewProps {
   roadmap: Roadmap;
+  skills?: string[];
+  targetTitle?: string;
+  matchedJobs?: string[];
+  showTrajectoryOnly?: boolean;
 }
 
-export function RoadmapView({ roadmap }: RoadmapViewProps) {
+export function RoadmapView({ roadmap, skills, targetTitle, matchedJobs, showTrajectoryOnly = false }: RoadmapViewProps) {
   const isFallback = roadmap.status === 'fallback';
+  const [selectedPhase, setSelectedPhase] = useState<CareerPhase | null>(null);
 
   if (roadmap.status === 'pending') {
     return (
@@ -22,7 +30,10 @@ export function RoadmapView({ roadmap }: RoadmapViewProps) {
     );
   }
 
-  if (!roadmap.skill_gaps.length && !roadmap.learning_steps.length && !Object.keys(roadmap.estimated_timeline_weeks).length) {
+  if (
+    !roadmap.learning_steps.length &&
+    !(roadmap.career_trajectory?.length ?? 0)
+  ) {
     return (
       <div className="text-center py-12">
         <Info className="mx-auto w-12 h-12 text-slate-400 mb-4" />
@@ -40,134 +51,50 @@ export function RoadmapView({ roadmap }: RoadmapViewProps) {
         <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
           <div className="text-sm text-amber-800">
-            <span className="font-medium">Fallback Mode:</span>{' '}
-            The roadmap was generated using a deterministic fallback because the local
-            LLM service is unavailable. Results are based on skill-gap analysis only.
+            <span className="font-medium">Deterministic Mode:</span>{' '}
+            No AI roadmap model is currently configured, so this roadmap was
+            generated deterministically from your skill-gap analysis.
           </div>
         </div>
       )}
 
-      {(roadmap.career_trajectory?.length ?? 0) > 0 && <StrategicTrajectory phases={roadmap.career_trajectory} />}
-
-      {roadmap.skill_gaps.length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-red-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Skill Gaps</h3>
-              <p className="text-sm text-slate-500">
-                Missing competencies required for your target role
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {roadmap.skill_gaps.map((gap, index) => (
-              <span
-                key={`${gap}-${index}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm font-medium"
-              >
-                <Target className="w-3.5 h-3.5" />
-                {gap}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {roadmap.learning_steps.length > 0 && (
+      {/* Learning Steps (only when not trajectory-only mode) */}
+      {!showTrajectoryOnly && roadmap.learning_steps.length > 0 && (
         <section className="bg-white rounded-xl border border-slate-200 p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-green-600" />
+              <CheckCircle className="w-5 h-5 text-green-600" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Learning Steps</h3>
               <p className="text-sm text-slate-500">
-                Actionable milestones to close the skill gaps
+                Actionable milestones to close the gaps
               </p>
             </div>
           </div>
-          <ol className="space-y-4">
-            {roadmap.learning_steps.map((step, index) => (
-              <li key={`${step}-${index}`} className="relative pl-10">
-                <div className="absolute left-0 top-1 flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-600 text-sm font-bold">
-                  {index + 1}
-                </div>
-                <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                  <p className="text-slate-700">{step}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <LearningSteps steps={roadmap.learning_steps} />
         </section>
       )}
 
-      {Object.keys(roadmap.estimated_timeline_weeks).length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Estimated Timeline</h3>
-              <p className="text-sm text-slate-500">
-                Suggested duration for each learning phase
-              </p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {Object.entries(roadmap.estimated_timeline_weeks).map(([phase, weeks], index) => (
-              <div
-                key={`${phase}-${index}`}
-                className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-100"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-primary-600" />
-                  </div>
-                  <span className="font-medium text-slate-900">{phase}</span>
-                </div>
-                <span className="px-3 py-1 text-sm font-semibold text-primary-700 bg-primary-100 rounded-full">
-                  {weeks}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+      {/* Career Trajectory */}
+      {(roadmap.career_trajectory?.length ?? 0) > 0 && (
+        <StrategicTrajectory phases={roadmap.career_trajectory} onSelect={setSelectedPhase} />
       )}
 
-      {(roadmap.matched_jobs?.length ?? 0) > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-              <Info className="w-5 h-5 text-slate-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Based on Matched Jobs</h3>
-              <p className="text-sm text-slate-500">
-                These job specifications informed the roadmap
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {roadmap.matched_jobs.map((job, index) => (
-              <span
-                key={`${job}-${index}`}
-                className="px-3 py-1 text-sm bg-slate-100 text-slate-700 rounded-lg border border-slate-200"
-              >
-                {job}
-              </span>
-            ))}
-          </div>
-        </section>
+      {selectedPhase && (
+        <PhaseDetailModal
+          phase={selectedPhase}
+          onClose={() => setSelectedPhase(null)}
+          skills={skills ?? []}
+          targetTitle={targetTitle ?? ''}
+          matchedJobs={matchedJobs ?? []}
+        />
       )}
     </div>
   );
 }
 
-function StrategicTrajectory({ phases }: { phases: CareerPhase[] }) {
+function StrategicTrajectory({ phases, onSelect }: { phases: CareerPhase[]; onSelect: (p: CareerPhase) => void }) {
   return (
     <section className="bg-white rounded-xl border border-slate-200 p-6">
       <div className="flex items-center gap-3 mb-6">
@@ -184,7 +111,14 @@ function StrategicTrajectory({ phases }: { phases: CareerPhase[] }) {
 
       <div className="space-y-6">
         {phases.map((phase, index) => (
-          <div key={`${phase.name}-${index}`} className="relative pl-10">
+          <div
+            key={`${phase.name}-${index}`}
+            className="relative pl-10 cursor-pointer hover:bg-slate-50 hover:shadow-xl hover:scale-[1.02] rounded-xl transition-all duration-300"
+            onClick={() => onSelect(phase)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(phase); } }}
+          >
             <div className="absolute left-0 top-0 flex flex-col items-center">
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary-600 text-white text-sm font-bold">
                 {index + 1}
@@ -202,6 +136,12 @@ function StrategicTrajectory({ phases }: { phases: CareerPhase[] }) {
                 </span>
               </div>
               <p className="text-sm text-slate-600">{phase.focus}</p>
+              {phase.salary_range_gbp && (
+                <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-500">
+                  <PoundSterling className="w-3.5 h-3.5" />
+                  <span>{phase.salary_range_gbp}</span>
+                </div>
+              )}
               {(phase.objectives?.length ?? 0) > 0 && (
                 <ul className="mt-3 space-y-1.5">
                   {phase.objectives.map((objective, i) => (
@@ -212,6 +152,10 @@ function StrategicTrajectory({ phases }: { phases: CareerPhase[] }) {
                   ))}
                 </ul>
               )}
+              <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                <ChevronRight className="w-3.5 h-3.5" />
+                <span>Click to explore phase details →</span>
+              </div>
             </div>
           </div>
         ))}

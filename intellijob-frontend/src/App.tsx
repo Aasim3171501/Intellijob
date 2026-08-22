@@ -5,7 +5,7 @@ import type { AnalyzeResponse } from '@/types/api';
 import {
   Dropzone,
   SkillPills,
-  MatchCard,
+  MatchedRoles,
   RoadmapView,
   LoadingSpinner,
   CareerPathways,
@@ -71,6 +71,10 @@ function App() {
       : null;
   const viewMatches = activePathway ? activePathway.matches : (result?.matches ?? []);
   const viewRoadmap = activePathway ? activePathway.roadmap : result?.roadmap;
+  const roleTitles =
+    viewRoadmap?.matched_jobs?.length
+      ? viewRoadmap.matched_jobs
+      : viewMatches.map((m) => m.title);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -223,16 +227,8 @@ function App() {
                   </h3>
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Jobs Analyzed</span>
+                      <span className="text-slate-600">Roles Analysed</span>
                       <span className="font-semibold text-slate-900">{viewMatches.length}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">Top Match Score</span>
-                      <span className="font-semibold text-primary-700">
-                        {viewMatches[0]
-                          ? `${Math.round(viewMatches[0].similarity_score * 100)}%`
-                          : 'N/A'}
-                      </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-600">Skills Extracted</span>
@@ -240,42 +236,55 @@ function App() {
                     </div>
                   </div>
                 </div>
+
+                {viewRoadmap?.skill_gaps && viewRoadmap.skill_gaps.length > 0 && (
+                  <div className="bg-white rounded-xl border border-slate-200 p-6">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                      Missing Skills
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {viewRoadmap.skill_gaps.map((gap, index) => (
+                        <span
+                          key={`${gap}-${index}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm font-medium"
+                        >
+                          {gap}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="lg:col-span-2 space-y-6">
-                <section>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-primary-500"></span>
-                      {activePathway ? `Matches in ${activePathway.name}` : 'Top Job Matches'}
-                    </h3>
-                    <span className="text-sm text-slate-500">
-                      {viewMatches.length} matches found
-                    </span>
-                  </div>
-                  <div className="space-y-4">
-                    {viewMatches.map((match, index) => (
-                      <MatchCard
-                        key={match.id}
-                        match={match}
-                        index={index}
-                      />
-                    ))}
-                    {viewMatches.length === 0 && (
-                      <div className="text-center py-12 text-slate-500">
-                        <p>No matching jobs found for the given criteria.</p>
-                      </div>
-                    )}
-                  </div>
-                </section>
+                <MatchedRoles titles={roleTitles} />
 
                 {viewRoadmap && (
                   <section>
-                    <RoadmapView roadmap={viewRoadmap} />
+                    <RoadmapView
+                      roadmap={viewRoadmap}
+                      skills={result.extracted_skills}
+                      targetTitle={targetTitle}
+                      matchedJobs={roleTitles}
+                    />
                   </section>
                 )}
               </div>
             </div>
+
+            {/* Career Trajectory - full width below both columns */}
+            {viewRoadmap?.career_trajectory && viewRoadmap.career_trajectory.length > 0 && (
+              <section className="mt-6">
+                <RoadmapView
+                  roadmap={viewRoadmap}
+                  skills={result.extracted_skills}
+                  targetTitle={targetTitle}
+                  matchedJobs={roleTitles}
+                  showTrajectoryOnly={true}
+                />
+              </section>
+            )}
           </div>
         )}
       </main>
@@ -286,7 +295,7 @@ function App() {
             IntelliJob — Local Career Analytics Platform | Built for MSc IT+ Dissertation
           </p>
           <p className="mt-1">
-            Powered by PyMuPDF, spaCy, SentenceTransformers, and local Ollama LLMs
+            Powered by PyMuPDF, spaCy, SentenceTransformers, and deterministic skill-gap analysis
           </p>
         </div>
       </footer>

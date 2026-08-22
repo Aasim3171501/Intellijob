@@ -1,0 +1,69 @@
+{
+  "case_insensitive": {
+    "programming_languages": [
+      "python", "java", "javascript", "typescript", "rust", "kotlin",
+      "php", "scala", "dart", "perl", "bash", "sql", "html", "css",
+      "powershell", "matlab", "c++", ".net"
+    ],
+    "web_frameworks": [
+      "django", "flask", "fastapi", "angular", "svelte", "laravel",
+      "next.js", "node.js", "graphql", "grpc", "tailwind", "bootstrap"
+    ],
+    "data_ml": [
+      "pandas", "numpy", "tensorflow", "pytorch", "kafka", "spark",
+      "hadoop", "airflow", "databricks", "tableau", "looker", "jupyter"
+    ],
+    "databases": [
+      "postgresql", "mysql", "mongodb", "redis", "elasticsearch",
+      "cassandra", "sqlite", "dynamodb", "firebase", "supabase",
+      "oracle", "mariadb", "cockroachdb", "opensearch"
+    ],
+    "devops_cloud": [
+      "docker", "kubernetes", "terraform", "aws", "gcp", "azure",
+      "jenkins", "gitlab", "github", "bitbucket", "circleci", "ansible",
+      "prometheus", "grafana", "datadog", "linux", "ubuntu", "nginx",
+      "helm", "argocd", "vault", "consul", "kibana", "sentry"
+    ],
+    "version_control": ["git"],
+    "methodologies_tools": [
+      "agile", "scrum", "kanban", "devops", "jira", "confluence", "figma"
+    ],
+    "mobile_development": ["ios", "android", "flutter", "xamarin"],
+    "embedded_systems": [
+      "firmware", "rtos", "freertos", "microcontroller", "fpga",
+      "vhdl", "verilog", "iot"
+    ],
+    "frontend_ecosystem": ["redux", "jest", "webpack", "vite"]
+  },
+  "case_sensitive": {
+    "programming_languages": ["Go", "R", "Swift", "Ruby", "C"],
+    "web_frameworks": ["React", "Vue", "Spring", "Express"],
+    "data_ml": ["Snowflake"],
+    "devops_cloud": ["Chef", "Puppet"],
+    "methodologies_tools": ["Lean"],
+    "mobile_development": ["UIKit", "SwiftUI", "Xcode"]
+  },
+  "phrases": [
+    ["machine", "learning"],
+    ["data", "engineering"],
+    ["data", "science"],
+    ["big", "data"],
+    ["rest", "api"],
+    ["continuous", "integration"],
+    ["continuous", "delivery"],
+    ["test", "driven", "development"],
+    ["cloud", "computing"],
+    ["computer", "vision"],
+    ["natural", "language", "processing"],
+    ["distributed", "systems"],
+    ["microservices", "architecture"],
+    ["object", "oriented", "programming"],
+    ["power", "bi"],
+    ["ruby", "on", "rails"],
+    ["spring", "boot"],
+    ["c", "#"],
+    ["scikit", "-", "learn"],
+    ["react", "native"],
+    ["embedded", "c"]
+  ]
+}

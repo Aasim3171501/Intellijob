@@ -38,11 +38,10 @@ from api.services.matcher import (
     _compose_query_text,
     embed_query,
     load_job_index,
-    match_jobs,
     match_from_text,
+    match_jobs,
     reset_job_index_cache,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Fixtures
@@ -131,15 +130,17 @@ class _Fixture:
 class ComposeQueryTextTests(unittest.TestCase):
     def test_title_and_skills(self) -> None:
         out = _compose_query_text(["Python", "Django"], "Backend Engineer")
-        self.assertEqual(out, "Backend Engineer. skills: Python, Django")
+        self.assertEqual(
+            out, "Target Role: Backend Engineer. Technical Skills: Python, Django"
+        )
 
     def test_title_only(self) -> None:
         self.assertEqual(_compose_query_text([], "Data Scientist"),
-                         "Data Scientist")
+                         "Target Role: Data Scientist")
 
     def test_skills_only(self) -> None:
         self.assertEqual(_compose_query_text(["Python"], ""),
-                         "skills: Python")
+                         "Technical Skills: Python")
 
     def test_empty_both(self) -> None:
         self.assertEqual(_compose_query_text([], ""), "")
@@ -147,7 +148,7 @@ class ComposeQueryTextTests(unittest.TestCase):
 
     def test_skips_empty_skill_strings(self) -> None:
         out = _compose_query_text(["Python", "", "  ", "Django"], "SWE")
-        self.assertEqual(out, "SWE. skills: Python, Django")
+        self.assertEqual(out, "Target Role: SWE. Technical Skills: Python, Django")
 
 
 # --------------------------------------------------------------------------- #
@@ -347,14 +348,14 @@ class MatchJobsTests(unittest.TestCase):
                 schema_version=np.asarray(1, dtype=np.int64),
             )
             _write_csv(tmp / "x.csv", [
-                {**{c: "" for c in CSV_COLUMNS}, **{
+                {**{c: "" for c in CSV_COLUMNS}, 
                     "id": "a", "title": "A",
-                    "description": big,
-                }},
-                {**{c: "" for c in CSV_COLUMNS}, **{
+                    "description": big
+                },
+                {**{c: "" for c in CSV_COLUMNS}, 
                     "id": "b", "title": "B",
-                    "description": "short",
-                }},
+                    "description": "short"
+                },
             ])
             reset_job_index_cache()
             idx = load_job_index(
@@ -400,10 +401,10 @@ class MatchJobsTests(unittest.TestCase):
             )
             # CSV only contains "a".
             _write_csv(tmp / "x.csv", [
-                {**{c: "" for c in CSV_COLUMNS}, **{
+                {**{c: "" for c in CSV_COLUMNS}, 
                     "id": "a", "title": "A",
-                    "description": "the only row",
-                }},
+                    "description": "the only row"
+                },
             ])
             reset_job_index_cache()
             idx = load_job_index(

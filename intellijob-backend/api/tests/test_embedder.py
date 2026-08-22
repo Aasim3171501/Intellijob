@@ -18,7 +18,6 @@ What's covered:
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 from unittest import mock
 
 import numpy as np

@@ -44,8 +44,8 @@ from __future__ import annotations
 
 import os
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -275,9 +275,9 @@ def embed_jobs(
 
 
 __all__ = [
-    "EMBEDDING_SCHEMA_VERSION",
     "DEFAULT_MODEL_NAME",
     "EMBEDDING_DIM",
+    "EMBEDDING_SCHEMA_VERSION",
     "EmbeddingResult",
     "compose_embedding_text",
     "embed_jobs",

@@ -30,9 +30,9 @@ CSV schema (matches scripts/seed_jobs.py CSV_FIELDS, schema_version 1):
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
 
 # --------------------------------------------------------------------------- #
 # Schema
@@ -284,9 +284,9 @@ def validate_rows(
 
 
 __all__ = [
+    "BOOL_COLUMNS",
     "CSV_COLUMNS",
     "INT_COLUMNS",
-    "BOOL_COLUMNS",
     "MIN_DESCRIPTION_CHARS",
     "JobRow",
     "ValidationReport",

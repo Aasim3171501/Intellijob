@@ -12,16 +12,19 @@ the PDF layer at all. The PDF-path test mocks pymupdf4llm.
 
 from __future__ import annotations
 
+import json
 import unittest
 from unittest import mock
 
 from api.services.skill_extractor import (
     DEFAULT_SKILL_LABEL,
+    GAZETTEER_PATH,
     SKILL_PATTERNS,
     extract_skills_from_pdf,
     extract_skills_from_text,
     extract_text_from_pdf,
     get_nlp,
+    pattern_surface,
 )
 
 
@@ -43,21 +46,71 @@ class GazetteerTests(unittest.TestCase):
         bad = [p for p in SKILL_PATTERNS if "pattern" not in p]
         self.assertEqual(bad, [])
 
-    def test_every_pattern_is_a_single_token(self) -> None:
-        # We keep patterns simple — exactly one token dict per pattern.
-        # If you add multi-token patterns later, update this test.
+    def test_every_pattern_has_valid_token_specs(self) -> None:
+        # Each token spec must be a single-key dict using only the
+        # attributes EntityRuler accepts for our gazetteer.
         for p in SKILL_PATTERNS:
-            self.assertEqual(
-                len(p["pattern"]), 1,
-                f"Pattern {p!r} has multi-token pattern; tests assume 1.",
-            )
+            self.assertGreaterEqual(len(p["pattern"]), 1)
+            for spec in p["pattern"]:
+                self.assertEqual(
+                    len(spec), 1,
+                    f"Pattern {p!r} has multi-key token spec: {spec}",
+                )
+                key = next(iter(spec))
+                self.assertIn(
+                    key, ("LOWER", "TEXT"),
+                    f"Pattern {p!r} uses unsupported attribute {key!r}",
+                )
 
     def test_no_duplicate_surface_forms(self) -> None:
         seen: set[str] = set()
         for p in SKILL_PATTERNS:
-            surface = p["pattern"][0]["TEXT"]
+            surface = pattern_surface(p).lower()
             self.assertNotIn(surface, seen, f"Duplicate skill pattern: {surface}")
             seen.add(surface)
+
+    def test_gazetteer_file_exists_and_is_valid(self) -> None:
+        self.assertTrue(GAZETTEER_PATH.exists())
+        with open(GAZETTEER_PATH, encoding="utf-8") as fh:
+            gazetteer = json.load(fh)
+        for section in ("case_insensitive", "case_sensitive", "phrases"):
+            self.assertIn(section, gazetteer)
+        total = (
+            sum(len(v) for v in gazetteer["case_insensitive"].values())
+            + sum(len(v) for v in gazetteer["case_sensitive"].values())
+            + len(gazetteer["phrases"])
+        )
+        self.assertGreater(total, 10)
+
+    def test_common_word_terms_are_case_sensitive(self) -> None:
+        # Terms that are ordinary English words must NOT be matched as
+        # single tokens case-insensitively ("go" would hit every sentence).
+        # (They may still appear inside phrases: "spring boot", "ruby on rails".)
+        gazetteer = json.loads(GAZETTEER_PATH.read_text(encoding="utf-8"))
+        for term in ("go", "react", "vue", "spring", "swift", "ruby", "r", "chef", "puppet", "lean", "express"):
+            in_lower = any(
+                term in skills
+                for skills in gazetteer["case_insensitive"].values()
+            )
+            self.assertFalse(
+                in_lower,
+                f"{term!r} is an English word but is matched case-insensitively",
+            )
+
+    def test_case_sensitive_terms_are_not_duplicated_in_lower(self) -> None:
+        gazetteer = json.loads(GAZETTEER_PATH.read_text(encoding="utf-8"))
+        lower = {
+            skill.lower()
+            for skills in gazetteer["case_insensitive"].values()
+            for skill in skills
+        }
+        for skills in gazetteer["case_sensitive"].values():
+            for skill in skills:
+                self.assertNotIn(
+                    skill.lower(), lower,
+                    f"{skill!r} appears in both case_sensitive and "
+                    f"case_insensitive sections",
+                )
 
 
 class SkillExtractionTests(unittest.TestCase):
@@ -99,8 +152,44 @@ class SkillExtractionTests(unittest.TestCase):
     def test_deduplicates_case_insensitive(self) -> None:
         text = "python PYTHON Python PyThOn developer."
         skills = extract_skills_from_text(text)
-        # All four mentions should collapse to one.
-        self.assertEqual(skills.count("Python"), 1)
+        # All four mentions match the LOWER pattern and collapse to the
+        # first-seen casing.
+        self.assertEqual(skills, ["python"])
+
+    def test_matches_case_insensitively(self) -> None:
+        text = "built backends in PYTHON with django and postgresql."
+        skills = extract_skills_from_text(text)
+        self.assertIn("PYTHON", skills)
+        self.assertIn("django", skills)
+        self.assertIn("postgresql", skills)
+
+    def test_common_word_skills_require_exact_casing(self) -> None:
+        # "react" / "go" are ordinary English words — lowercase must NOT
+        # be flagged as skills, only the capitalised framework/language.
+        lowercase = extract_skills_from_text("how to react to change and go home")
+        self.assertEqual(lowercase, [])
+        capitalised = extract_skills_from_text("I use React and Go daily.")
+        self.assertIn("React", capitalised)
+        self.assertIn("Go", capitalised)
+
+    def test_extracts_multi_token_phrases(self) -> None:
+        text = "Built machine learning models and a REST API."
+        skills = extract_skills_from_text(text)
+        self.assertIn("machine learning", skills)
+        self.assertIn("REST API", skills)
+
+    def test_extracts_symbol_skills(self) -> None:
+        text = "C# and scikit-learn are in my toolkit."
+        skills = extract_skills_from_text(text)
+        self.assertIn("C#", skills)
+        self.assertIn("scikit-learn", skills)
+
+    def test_extracts_newly_added_skills(self) -> None:
+        # Terms that came in with the JSON gazetteer, not the old list.
+        text = "Kafka, Spark, Jenkins, GraphQL, and Terraform."
+        skills = extract_skills_from_text(text)
+        for tech in ("Kafka", "Spark", "Jenkins", "GraphQL", "Terraform"):
+            self.assertIn(tech, skills, f"Missing newly added skill {tech}")
 
     def test_strips_trailing_punctuation(self) -> None:
         text = "Proficient in Python, Django, PostgreSQL."
@@ -195,9 +284,14 @@ class PdfExtractionTests(unittest.TestCase):
 @unittest.skip("Opt-in slow test: exercises every gazetteer entry against real spaCy")
 class GazetteerExhaustivenessTests(unittest.TestCase):
     def test_every_pattern_finds_itself_in_a_sentence(self) -> None:
-        nlp = _fresh_nlp()
+        _fresh_nlp()
         for p in SKILL_PATTERNS:
-            surface = p["pattern"][0]["TEXT"]
+            # Multi-token patterns (phrases, C#, scikit-learn) need a
+            # specially constructed sentence; only single-token patterns
+            # can be self-tested with a plain "I have experience with X".
+            if len(p["pattern"]) != 1:
+                continue
+            surface = next(iter(p["pattern"][0].values()))
             text = f"I have experience with {surface}."
             skills = extract_skills_from_text(text)
             self.assertIn(

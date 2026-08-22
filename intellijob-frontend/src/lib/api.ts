@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosError } from 'axios';
-import type { AnalyzeResponse, AnalyzeRequest } from '@/types/api';
+import type { AnalyzeResponse, AnalyzeRequest, LearningResource, PhasePlan } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -10,7 +10,7 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 300000, // 5 minutes for LLM generation (discovery mode: 3x Ollama roadmaps)
+      timeout: 300000, // 5 min headroom for parallel roadmap generation (discovery mode)
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -32,6 +32,28 @@ class ApiClient {
     formData.append('target_title', request.target_title);
 
     const response = await this.client.post<AnalyzeResponse>('/analyze/', formData);
+    return response.data;
+  }
+
+  async getLearningResources(skill: string): Promise<LearningResource[]> {
+    const response = await this.client.get<{ resources: LearningResource[] }>('/learning-resources/', {
+      params: { skill },
+      timeout: 10000,
+    });
+    return response.data.resources;
+  }
+
+  async getPhasePlan(data: {
+    skills: string[];
+    target_title: string;
+    phase_name: string;
+    phase_focus: string;
+    matched_jobs: string[];
+  }): Promise<PhasePlan> {
+    const response = await this.client.post<PhasePlan>('/phase-plan/', data, {
+      timeout: 200000, // 200s - must exceed backend LLM_TIMEOUT_SECONDS (180s)
+      headers: { 'Content-Type': 'application/json' },
+    });
     return response.data;
   }
 }

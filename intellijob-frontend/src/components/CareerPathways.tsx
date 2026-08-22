@@ -22,7 +22,7 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
         <div>
           <h3 className="text-lg font-semibold text-slate-900">Recommended Career Pathways</h3>
           <p className="text-sm text-slate-500">
-            Your resume was matched against every pathway in the dataset — select one to explore.
+            Ranked against the skills on your resume — select one to explore.
           </p>
         </div>
       </div>
@@ -30,7 +30,8 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
         {pathways.map((pathway, index) => {
           const active = pathway.key === activeKey;
-          const scorePercent = Math.round(pathway.similarity_score * 100);
+          const scorePercent = Math.round((pathway.score ?? pathway.similarity_score) * 100);
+          const matched = pathway.matched_skills ?? [];
           return (
             <button
               key={pathway.key}
@@ -38,10 +39,10 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
               onClick={() => onSelect(pathway.key)}
               aria-pressed={active}
               className={cn(
-                'text-left rounded-xl border p-4 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500',
+                'text-left rounded-xl border p-4 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary-500',
                 active
                   ? 'border-primary-600 ring-2 ring-primary-500 bg-primary-50'
-                  : 'border-slate-200 hover:border-primary-300 bg-white hover:bg-slate-50'
+                  : 'border-slate-200 hover:border-primary-300 bg-white hover:bg-slate-50 hover:shadow-xl hover:scale-[1.02]'
               )}
             >
               <div className="flex items-center justify-between mb-1">
@@ -70,6 +71,25 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
               <p className="text-xs text-slate-400 mt-2">
                 {pathway.match_count} roles analysed
               </p>
+              {matched.length > 0 && (
+                <div className="mt-2 border-t border-slate-100 pt-2">
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    Overlaps {matched.length} of your skills
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {matched.slice(0, 3).map((skill) => (
+                      <span key={skill} className="text-[11px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-700">
+                        {skill}
+                      </span>
+                    ))}
+                    {matched.length > 3 && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                        +{matched.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </button>
           );
         })}

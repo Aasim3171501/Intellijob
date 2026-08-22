@@ -13,9 +13,18 @@ satisfies the dissertation spec:
 We hit the Adzuna API once, save the raw responses to a CSV, and that file
 becomes the canonical input to the embedding pipeline in Phase B.
 
+Search coverage: every career pathway in api/services/pathways.py gets at
+least one targeted query (embedded, mobile, game, security, QA, ...), not
+just the generic "software engineer" titles — otherwise those careers can
+never be recommended, however good the matching is.
+
 Run with:
     intellijob-backend/venv/Scripts/python.exe scripts/seed_jobs.py
     intellijob-backend/venv/Scripts/python.exe scripts/seed_jobs.py --dry-run
+
+After re-seeding, rebuild the vectors so the matcher/pathway engine picks
+up the new jobs:
+    intellijob-backend/venv/Scripts/python.exe scripts/embed_jobs.py
 
 Output:
     intellijob-backend/data/uk_software_jobs.csv
@@ -35,7 +44,8 @@ import time
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
+
 import requests
 from dotenv import load_dotenv
 
@@ -57,34 +67,115 @@ if not ADZUNA_APP_ID or not ADZUNA_APP_KEY:
         f"Add them to {PROJECT_ROOT / '.env'} and re-run."
     )
 
-# Job titles we want to seed. Picked to cover the C3-IoC UK IT-role space
-# (software engineer, data scientist, devops, web dev, data analyst, etc.)
-# so that we get a meaningful UK IT job distribution rather than just one role.
+# Search queries, grouped by career pathway (see api/services/pathways.py).
+# Each pathway gets at least one targeted query so the dataset is not
+# dominated by generic "software engineer" postings — an embedded or mobile
+# resume can only be recommended if the seed actually contains those roles.
 SEARCH_QUERIES: list[str] = [
+    # software-engineering (generic catch-all)
     "software engineer",
     "software developer",
+    # ml-ai
     "data scientist",
-    "data engineer",
-    "data analyst",
-    "devops engineer",
     "machine learning engineer",
+    "ai engineer",
+    "mlops engineer",
+    "nlp engineer",
+    "computer vision engineer",
+    # data-eng
+    "data engineer",
+    "etl developer",
+    "big data engineer",
+    # data-analytics
+    "data analyst",
+    "business intelligence analyst",
+    "business analyst",
+    # devops
+    "devops engineer",
+    "cloud engineer",
+    "site reliability engineer",
+    "platform engineer",
+    "infrastructure engineer",
+    "kubernetes engineer",
+    "release engineer",
+    "linux system administrator",
+    "linux engineer",
+    # backend
     "backend developer",
+    "java developer",
+    ".net developer",
+    "python developer",
+    "node.js developer",
+    "golang developer",
+    "c++ developer",
+    "php developer",
+    # frontend
     "frontend developer",
+    "react developer",
+    "vue developer",
+    "angular developer",
+    "web developer",
+    "ui engineer",
+    # fullstack
     "full stack developer",
+    "fullstack developer",
+    # mobile
+    "mobile developer",
+    "ios developer",
+    "android developer",
+    "react native developer",
+    "flutter developer",
+    # game
+    "game developer",
+    "unity developer",
+    "unreal developer",
+    "graphics programmer",
+    # embedded / hardware
+    "embedded software engineer",
+    "firmware engineer",
+    "hardware engineer",
+    "fpga engineer",
+    "iot engineer",
+    "robotics engineer",
+    "control systems engineer",
+    # security
+    "cyber security analyst",
+    "security engineer",
+    "penetration tester",
+    "application security engineer",
+    "information security analyst",
+    # qa
+    "qa automation engineer",
+    "sdet",
+    "test engineer",
+    # architecture
+    "solution architect",
+    "technical architect",
+    "enterprise architect",
+    "cloud architect",
+    # delivery
+    "product manager",
+    "project manager",
+    "program manager",
+    "scrum master",
+    "technical account manager",
 ]
 
-# UK locations — three big IT hubs gives geographic spread.
+# UK locations — a spread of IT hubs gives geographic diversity.
 # (Adzuna's `where` accepts a city or region name.)
 LOCATIONS: list[str] = [
     "London",
     "Manchester",
     "Edinburgh",
+    "Glasgow",
+    "Bristol",
 ]
 
 # Max results to request per query. Adzuna caps each page at 50 and
-# uses 1 API call per page. Keep this modest for the free tier.
+# uses 1 API call per page. Two pages per (query, location) roughly
+# doubles the per-role coverage without hammering the free tier.
 RESULTS_PER_PAGE = 50
-MAX_PAGES = 1  # 1 page × 50 = 50 results per (query, location)
+MAX_PAGES = 2  # 2 pages × 50 = up to 100 results per (query, location)
 
 OUTPUT_CSV = PROJECT_ROOT / "data" / "uk_software_jobs.csv"
 MANIFEST_JSON = PROJECT_ROOT / "data" / "MANIFEST.json"
@@ -134,9 +225,9 @@ class _HTMLStripper(HTMLParser):
     by default).
     """
 
-    BLOCK_TAGS = {"p", "br", "li", "div", "h1", "h2", "h3", "h4", "tr"}
+    BLOCK_TAGS: ClassVar[set[str]] = {"p", "br", "li", "div", "h1", "h2", "h3", "h4", "tr"}
     # Tags whose textual content we must never let through.
-    DROP_TAGS = {"script", "style", "noscript"}
+    DROP_TAGS: ClassVar[set[str]] = {"script", "style", "noscript"}
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -198,7 +289,7 @@ def html_to_text(html: str) -> str:
     try:
         stripper.feed(html)
         stripper.close()
-    except Exception:
+    except Exception:  # noqa: BLE001 - any parser defect -> crude strip fallback
         # If Adzuna ever sends something malformed, fall back to a crude
         # strip rather than crashing the whole seed run.
         return " ".join(html.split())
@@ -231,20 +322,22 @@ def fetch_page(
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = requests.get(url, params=params, timeout=30)
-            if response.status_code == 429 or response.status_code >= 500:
+            if (
+                response.status_code in (429, 500, 501, 502, 503, 504)
+                and attempt < MAX_RETRIES
+            ):
                 # Transient — back off and retry.
-                if attempt < MAX_RETRIES:
-                    wait = RETRY_BACKOFF_SECONDS * attempt
-                    print(
-                        f"   (retry {attempt}/{MAX_RETRIES - 1} "
-                        f"after {wait:.1f}s — HTTP {response.status_code})",
-                        flush=True,
-                    )
-                    time.sleep(wait)
-                    continue
+                wait = RETRY_BACKOFF_SECONDS * attempt
+                print(
+                    f"   (retry {attempt}/{MAX_RETRIES - 1} "
+                    f"after {wait:.1f}s — HTTP {response.status_code})",
+                    flush=True,
+                )
+                time.sleep(wait)
+                continue
             response.raise_for_status()
             return response.json().get("results", [])
-        except requests.HTTPError as e:
+        except requests.HTTPError:
             # Non-transient HTTP error: don't retry, surface immediately.
             raise
         except requests.RequestException as e:
@@ -357,34 +450,42 @@ def collect_rows() -> tuple[list[dict[str, Any]], int, dict[str, int]]:
     for location in LOCATIONS:
         for query in SEARCH_QUERIES:
             print(f"  -> {query!r:35s} | {location!r:12s}", end=" ", flush=True)
-            try:
-                page_results = fetch_page(page=1, query=query, location=location)
-            except requests.HTTPError as e:
-                print(f"HTTP {e.response.status_code} — skipping")
-                stats["errors"] += 1
-                continue
-            except requests.RequestException as e:
-                print(f"network error: {e} — skipping")
-                stats["errors"] += 1
-                continue
-            api_calls += 1
-            stats["fetched"] += len(page_results)
+            query_added = 0
+            for page in range(1, MAX_PAGES + 1):
+                try:
+                    page_results = fetch_page(page=page, query=query, location=location)
+                except requests.HTTPError as e:
+                    print(f"HTTP {e.response.status_code} — skipping")
+                    stats["errors"] += 1
+                    break
+                except requests.RequestException as e:
+                    print(f"network error: {e} — skipping")
+                    stats["errors"] += 1
+                    break
+                api_calls += 1
+                stats["fetched"] += len(page_results)
 
-            added = 0
-            for result in page_results:
-                rid = str(result.get("id", ""))
-                if not rid:
-                    stats["skipped_no_id"] += 1
-                    continue
-                if rid in seen_ids:
-                    stats["deduped"] += 1
-                    continue
-                seen_ids.add(rid)
-                rows.append(to_row(result, query=query, location=location))
-                added += 1
-            print(f"-> {added:3d} new ({len(rows):4d} total, {api_calls} API calls)")
+                page_added = 0
+                for result in page_results:
+                    rid = str(result.get("id", ""))
+                    if not rid:
+                        stats["skipped_no_id"] += 1
+                        continue
+                    if rid in seen_ids:
+                        stats["deduped"] += 1
+                        continue
+                    seen_ids.add(rid)
+                    rows.append(to_row(result, query=query, location=location))
+                    page_added += 1
+                query_added += page_added
 
-            time.sleep(API_DELAY_SECONDS)
+                if len(page_results) < RESULTS_PER_PAGE:
+                    break  # fewer than a full page => no more results
+                time.sleep(API_DELAY_SECONDS)
+            print(
+                f"-> {query_added:3d} new ({len(rows):4d} total, "
+                f"{api_calls} API calls)"
+            )
 
     return rows, api_calls, stats
 

@@ -165,23 +165,28 @@ def reset_job_index_cache() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _compose_query_text(skills: Sequence[str], target_title: str) -> str:
-    """The single source of truth for query composition.
-
-    Composition: "{target_title}. skills: skill1, skill2, ..."
-
-    Stays next to :func:`embed_query` for easy evolution — if this
-    ever diverges from the dataset's embedder-side composition,
-    top-k ranking degrades silently. Bump the matcher schema_version
-    if you change it.
-    """
+def _compose_query_text(
+    skills: Sequence[str],
+    target_title: str,
+    resume_context: str = "",
+) -> str:
+    """Compose rich text for embedding candidate profile."""
     title = (target_title or "").strip()
     skills_clean = [s for s in (skills or []) if s and s.strip()]
     parts: list[str] = []
+    
     if title:
-        parts.append(title)
+        parts.append(f"Target Role: {title}")
     if skills_clean:
-        parts.append("skills: " + ", ".join(skills_clean))
+        parts.append("Technical Skills: " + ", ".join(skills_clean))
+    if resume_context:
+        # Include a SHORT candidate background snippet only. Full resume
+        # prose would dominate the 384-d sentence vector and swamp the
+        # specific skill keywords, dragging every technical resume toward
+        # the same generic region — truncating keeps the skills as the
+        # dominant signal.
+        parts.append(f"Experience & Profile: {resume_context[:300].strip()}")
+        
     return ". ".join(parts)
 
 
@@ -201,20 +206,10 @@ def embed_query(
     skills: Sequence[str],
     target_title: str,
     *,
+    resume_context: str = "",
     model_name: str = DEFAULT_MODEL_NAME,
 ) -> np.ndarray:
-    """Embed a candidate query (skills + target title) into a 384-d
-    unit-norm vector, in the same space as the pre-vectorised jobs.
-
-    Returns the all-zero vector (length 384) for an entirely empty
-    query — matches are then all-zero similarity, a stable but
-    uninformative fallback. Callers should reject empty input.
-
-    The SentenceTransformer is loaded lazily and cached at module
-    scope (see :func:`_get_query_model`). First call pays the
-    ~10 s model-load cost; subsequent calls are sub-second on CPU.
-    """
-    text = _compose_query_text(skills, target_title)
+    text = _compose_query_text(skills, target_title, resume_context=resume_context)
     if not text:
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 

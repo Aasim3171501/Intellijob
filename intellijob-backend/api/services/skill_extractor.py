@@ -20,8 +20,17 @@ Design choices:
   separately so each is unit-testable in isolation.
 * Skills are returned as a sorted, de-duplicated list of strings
   (case-insensitive dedup, original casing preserved).
-* The skill gazetteer lives in :data:`SKILL_PATTERNS` at module
-  scope. Adding more skills is one edit, no regex changes.
+* The skill gazetteer lives in ``skills_gazetteer.json`` next to this
+  module — pure data, no code changes to add skills. It is loaded at
+  import time into :data:`SKILL_PATTERNS`.
+  * ``case_insensitive`` entries match any casing via spaCy's LOWER
+    attribute (``python`` matches "python", "Python", "PYTHON").
+  * ``case_sensitive`` entries match exact casing via TEXT — reserved
+    for terms that are also ordinary English words ("React", "Go",
+    "Swift", "Spring") where a lower-case match would be noise.
+  * ``phrases`` entries are multi-token skills ("machine learning",
+    "C#", "scikit-learn"). Alphanumeric tokens match case-insensitively;
+    punctuation tokens (".", "#", "-") match exactly.
 * The spaCy nlp object is built lazily and cached at module scope
   via :func:`get_nlp` so importing this module does not pay the
   ~0.3 s model-load cost. Tests can call ``get_nlp.cache_clear()``
@@ -30,6 +39,7 @@ Design choices:
 Public API:
     SKILL_PATTERNS          - list[dict] for EntityRuler.add_patterns
     DEFAULT_SKILL_LABEL     - "SKILL"
+    GAZETTEER_PATH          - path to skills_gazetteer.json
     get_nlp()               - cached spaCy nlp object
     extract_text_from_pdf() - PDF bytes -> Markdown str
     extract_skills_from_text() - str -> list[str]
@@ -38,77 +48,89 @@ Public API:
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from functools import lru_cache
-from typing import Iterable
+from pathlib import Path
 
 # --------------------------------------------------------------------------- #
 # Skill gazetteer
 # --------------------------------------------------------------------------- #
 
-#: Surface forms we want to recognise as SKILL tokens.
-#: Order does not matter — EntityRuler matches longest-first within
-#: the same span. Lower-case surface forms are matched case-
-#: insensitively by spaCy's token matcher; we keep the canonical
-#: casing in the pattern so the EntityRuler preserves it.
-#: Adding new skills: append a dict here. Patterns are deliberately
-#: simple substrings (no regex) to keep the test surface small.
-SKILL_PATTERNS: list[dict] = [
-    # ----- Programming languages -----
-    {"label": "SKILL", "pattern": [{"TEXT": "Python"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Java"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "JavaScript"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "TypeScript"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Go"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Rust"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "C++"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "C#"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "SQL"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Bash"}]},
-
-    # ----- Web frameworks -----
-    {"label": "SKILL", "pattern": [{"TEXT": "Django"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Flask"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "FastAPI"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "React"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Vue"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Angular"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Next.js"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Node.js"}]},
-
-    # ----- Data / ML -----
-    {"label": "SKILL", "pattern": [{"TEXT": "Pandas"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "NumPy"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "scikit-learn"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "TensorFlow"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "PyTorch"}]},
-
-    # ----- Databases / data infra -----
-    {"label": "SKILL", "pattern": [{"TEXT": "PostgreSQL"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "MySQL"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "MongoDB"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Redis"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Elasticsearch"}]},
-
-    # ----- DevOps / cloud -----
-    {"label": "SKILL", "pattern": [{"TEXT": "Docker"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Kubernetes"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "AWS"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "GCP"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Azure"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Terraform"}]},
-
-    # ----- Version control / CI -----
-    {"label": "SKILL", "pattern": [{"TEXT": "Git"}]},
-
-    # ----- Methodologies / soft -----
-    {"label": "SKILL", "pattern": [{"TEXT": "Agile"}]},
-    {"label": "SKILL", "pattern": [{"TEXT": "Scrum"}]},
-]
-
 #: The label we stamp on every recognised skill entity.
 DEFAULT_SKILL_LABEL: str = "SKILL"
+
+#: Location of the human-maintained gazetteer. Pure JSON — expanding
+#: coverage is a data edit, not a code edit.
+GAZETTEER_PATH: Path = Path(__file__).with_name("skills_gazetteer.json")
+
+
+def _load_gazetteer() -> dict:
+    """Read and validate the gazetteer JSON file.
+
+    Raises FileNotFoundError / JSONDecodeError if the file is missing
+    or malformed — a loud failure is better than silently extracting
+    nothing.
+    """
+    with open(GAZETTEER_PATH, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _build_patterns(gazetteer: dict) -> list[dict]:
+    """Turn the JSON gazetteer into EntityRuler patterns.
+
+    * ``case_insensitive`` -> ``{"LOWER": ...}`` single-token patterns
+    * ``case_sensitive``   -> ``{"TEXT": ...}`` single-token patterns
+    * ``phrases``          -> multi-token patterns; alphanumeric tokens
+      use LOWER, punctuation tokens (".", "#", "-") use TEXT
+
+    Duplicate surface forms (across categories or match modes) are
+    dropped so no skill is matched twice.
+    """
+    patterns: list[dict] = []
+    seen: set[tuple] = set()
+
+    def _add(token_specs: list[dict]) -> None:
+        signature = tuple(tuple(sorted(spec.items())) for spec in token_specs)
+        if signature in seen:
+            return
+        seen.add(signature)
+        patterns.append({"label": DEFAULT_SKILL_LABEL, "pattern": token_specs})
+
+    for skills in gazetteer.get("case_insensitive", {}).values():
+        for skill in skills:
+            _add([{"LOWER": skill}])
+    for skills in gazetteer.get("case_sensitive", {}).values():
+        for skill in skills:
+            _add([{"TEXT": skill}])
+    for tokens in gazetteer.get("phrases", []):
+        specs = [
+            {"TEXT": tok} if not tok.isalnum() else {"LOWER": tok}
+            for tok in tokens
+        ]
+        _add(specs)
+
+    return patterns
+
+
+#: EntityRuler patterns derived from the JSON gazetteer. Kept as the
+#: public, inspectable source of truth for tests and other services.
+SKILL_PATTERNS: list[dict] = _build_patterns(_load_gazetteer())
+
+
+def pattern_surface(pattern: dict) -> str:
+    """Human-readable surface form of an EntityRuler pattern.
+
+    Single-token patterns return the token value; phrase patterns join
+    word tokens with a space (``machine learning``) and glue punctuation
+    tokens directly (``c#``, ``scikit-learn``). Case follows the pattern
+    (LOWER entries come out lower-cased).
+    """
+    values = [next(iter(spec.values())) for spec in pattern["pattern"]]
+    if any(not v.isalnum() for v in values):
+        return "".join(values)
+    return " ".join(values)
 
 
 # --------------------------------------------------------------------------- #
@@ -230,10 +252,12 @@ def extract_skills_from_pdf(pdf_bytes: bytes) -> list[str]:
 
 
 __all__ = [
-    "SKILL_PATTERNS",
     "DEFAULT_SKILL_LABEL",
-    "get_nlp",
-    "extract_text_from_pdf",
-    "extract_skills_from_text",
+    "GAZETTEER_PATH",
+    "SKILL_PATTERNS",
     "extract_skills_from_pdf",
+    "extract_skills_from_text",
+    "extract_text_from_pdf",
+    "get_nlp",
+    "pattern_surface",
 ]

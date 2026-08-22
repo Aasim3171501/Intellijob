@@ -173,16 +173,31 @@ class AnalyzeViewTests(TestCase):
         )
         self._pymupdf_patch.start()
 
-        # Patch the RAG roadmap service so the view never touches Ollama.
+        # Patch the RAG roadmap service so the view never hits the network.
         # The service itself is covered by test_roadmap_generator.
-        from api.services.roadmap_generator import SkillGapRoadmap
+        from api.services.roadmap_generator import LearningStep, SkillGapRoadmap
 
         self._roadmap_patch = mock.patch(
             "api.views.generate_roadmap",
             return_value=SkillGapRoadmap(
                 status="generated",
                 skill_gaps=["Kubernetes", "Terraform"],
-                learning_steps=["Learn Kubernetes", "Learn Terraform"],
+                learning_steps=[
+                    LearningStep(
+                        id="step-1",
+                        title="Learn Kubernetes",
+                        overview="Master pods and deployments.",
+                        primary_skill="Kubernetes",
+                        estimated_hours=20,
+                    ),
+                    LearningStep(
+                        id="step-2",
+                        title="Learn Terraform",
+                        overview="Write IaC for a real stack.",
+                        primary_skill="Terraform",
+                        estimated_hours=15,
+                    ),
+                ],
                 estimated_timeline_weeks={"Phase 1 - Foundations": "2-3 weeks"},
                 matched_jobs=["Engineer-0"],
                 extracted_skill_count=5,
@@ -354,6 +369,28 @@ class AnalyzeViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["career_mode"], "discovery")
+
+    def test_discovery_with_no_ranked_pathway_returns_useful_roadmap(self) -> None:
+        # If no pathway ranks high enough, the top-level roadmap must never
+        # be an empty shell — otherwise the UI shows "No Roadmap Available".
+        from api.services import pathways
+
+        with mock.patch.object(pathways, "match_pathways", return_value=[]):
+            resp = self.client.post(
+                "/api/analyze/",
+                data={"file": _uploaded_file(self.tiny_pdf, "r.pdf")},
+                format="multipart",
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        body = resp.json()
+        self.assertEqual(body["career_mode"], "discovery")
+        self.assertEqual(body["career_pathways"], [])
+        # Top-level roadmap mirrors the (mocked) generated roadmap, not {}.
+        self.assertEqual(body["roadmap"]["status"], "generated")
+        self.assertEqual(body["roadmap"]["skill_gaps"], ["Kubernetes", "Terraform"])
+        self.assertGreater(len(body["roadmap"]["learning_steps"]), 0)
+        # Top-level matches come from real matching against the fixture index.
+        self.assertGreater(len(body["matches"]), 0)
 
     def test_discovery_ranks_best_fit_pathway_first(self) -> None:
         """A resume whose query aligns with the 'embedded' pathway centroid

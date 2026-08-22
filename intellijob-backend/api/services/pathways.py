@@ -47,7 +47,9 @@ Public API:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -57,6 +59,7 @@ from api.services.matcher import (
     load_job_index,
     matches_for_positions,
 )
+from api.services.skill_extractor import SKILL_PATTERNS, pattern_surface
 
 # --------------------------------------------------------------------------- #
 # Taxonomy
@@ -87,7 +90,7 @@ CAREER_PATHWAYS: tuple[Pathway, ...] = (
         description="Firmware, RTOS, FPGA and hardware-adjacent software roles.",
         keywords=(
             "embedded", "firmware", "fpga", "vhdl", "verilog", "rtos",
-            "microcontroller", "iot", "hardware", "robotics",
+            "microcontroller", "iot", "hardware", "robotics", "control systems",
         ),
     ),
     Pathway(
@@ -146,7 +149,8 @@ CAREER_PATHWAYS: tuple[Pathway, ...] = (
         keywords=(
             "backend", "back-end", "back end", "api engineer", "server engineer",
             "node", "java", "spring", ".net", "php", "scala", "kotlin",
-            "microservices", "distributed systems", "c#",
+            "python", "golang", "c++", "c#", "microservices",
+            "distributed systems",
         ),
     ),
     Pathway(
@@ -165,7 +169,8 @@ CAREER_PATHWAYS: tuple[Pathway, ...] = (
         key="game",
         name="Game Development",
         description="Gameplay, graphics and rendering engine roles.",
-        keywords=("game", "graphics engineer", "rendering", "unreal", "unity", "shader"),
+        keywords=("game", "graphics engineer", "graphics programmer", "gameplay programmer",
+          "rendering", "unreal", "unity", "shader"),
     ),
     Pathway(
         key="devops",
@@ -198,9 +203,9 @@ CAREER_PATHWAYS: tuple[Pathway, ...] = (
         name="Delivery & Product",
         description="Product, programme and delivery management roles.",
         keywords=(
-            "project manager", "programme", "product manager", "delivery",
-            "scrum", "agile", "consultant", "technical account manager",
-            "engagement", "solution owner",
+            "project manager", "programme manager", "program manager",
+            "product manager", "delivery", "scrum", "agile", "consultant",
+            "technical account manager", "engagement", "solution owner",
         ),
     ),
     Pathway(
@@ -213,6 +218,44 @@ CAREER_PATHWAYS: tuple[Pathway, ...] = (
 
 #: Catch-all pathway key (the final, keyword-less entry).
 FALLBACK_PATHWAY_KEY: str = "software-engineering"
+
+#: Weight of explicit skill-overlap in the blended pathway score. A pure
+#: embedding query dilutes on long resumes (paragraph prose dominates the
+#: sentence vector), so the resume's *actual* extracted skills must be the
+#: dominant, explainable signal. Must stay > SIM_WEIGHT to guarantee the
+#: ranking is driven by the candidate's skills, not embedding noise.
+SKILL_WEIGHT: float = 0.6
+
+#: Weight of cosine similarity to the pathway centroid in the blended score.
+SIM_WEIGHT: float = 0.4
+
+# --------------------------------------------------------------------------- #
+# Per-pathway skill sets (for the hybrid ranking)
+# --------------------------------------------------------------------------- #
+
+#: All gazetteer surfaces, longest first, so multi-word phrases like
+#: ``machine learning`` match before their single-word parts.
+_SURFACES: tuple[str, ...] = tuple(
+    sorted({pattern_surface(p) for p in SKILL_PATTERNS}, key=len, reverse=True)
+)
+
+#: One combined, word-boundary regex over every gazetteer surface. A single
+#: pass over a lower-cased job text collects all skills it mentions, which
+#: lets us compute per-pathway skill coverage in O(text) rather than
+#: O(patterns * text).
+_SKILL_REGEX = re.compile(
+    r"(?<![a-z0-9])(?:"
+    + "|".join(re.escape(s) for s in _SURFACES)
+    + r")(?![a-z0-9])",
+    re.IGNORECASE,
+)
+
+
+def _scan_skill_tokens(text: str) -> set[str]:
+    """Lower-cased gazetteer surfaces mentioned in ``text``."""
+    if not text:
+        return set()
+    return {m.group(0).lower() for m in _SKILL_REGEX.finditer(text)}
 
 
 def classify(title: str) -> str:
@@ -244,12 +287,17 @@ class PathwayIndex:
 
     ``centroids[key]`` is the normalised mean embedding of the pathway's
     member jobs; ``member_positions[key]`` is a tuple of row indices in
-    the JobIndex that belong to that pathway.
+    the JobIndex that belong to that pathway; ``skill_sets[key]`` is the
+    lower-cased gazetteer skill surface set found across that pathway's
+    member job text (title + description), used by the hybrid ranking to
+    measure how many of a candidate's extracted skills each pathway
+    actually requires.
     """
 
     centroids: dict[str, np.ndarray]
     member_positions: dict[str, tuple[int, ...]]
     dimension: int
+    skill_sets: dict[str, frozenset[str]] = field(default_factory=dict)
 
 
 def build_pathway_index(index: JobIndex) -> PathwayIndex:
@@ -265,6 +313,7 @@ def build_pathway_index(index: JobIndex) -> PathwayIndex:
     assign_arr = np.asarray(assignments, dtype=object)
     centroids: dict[str, np.ndarray] = {}
     member_positions: dict[str, tuple[int, ...]] = {}
+    skill_sets: dict[str, frozenset[str]] = {}
 
     for pathway in CAREER_PATHWAYS:
         key = pathway.key
@@ -272,6 +321,7 @@ def build_pathway_index(index: JobIndex) -> PathwayIndex:
         member_positions[key] = tuple(int(i) for i in positions)
         if positions.size == 0:
             centroids[key] = np.zeros(dimension, dtype=np.float32)
+            skill_sets[key] = frozenset()
             continue
         centroid = index.vectors[positions].mean(axis=0)
         norm = float(np.linalg.norm(centroid))
@@ -279,10 +329,21 @@ def build_pathway_index(index: JobIndex) -> PathwayIndex:
             centroid = centroid / norm
         centroids[key] = centroid.astype(np.float32, copy=False)
 
+        tokens: set[str] = set()
+        for pos in positions:
+            row = index.rows.get(str(index.ids[int(pos)]))
+            if row is None:
+                continue
+            text = f"{row.title or ''} {row.description or ''}"
+            if text:
+                tokens |= _scan_skill_tokens(text)
+        skill_sets[key] = frozenset(tokens)
+
     return PathwayIndex(
         centroids=centroids,
         member_positions=member_positions,
         dimension=dimension,
+        skill_sets=skill_sets,
     )
 
 
@@ -293,13 +354,25 @@ def build_pathway_index(index: JobIndex) -> PathwayIndex:
 
 @dataclass(frozen=True)
 class PathwayMatch:
-    """One career pathway ranked against the candidate query vector."""
+    """One career pathway ranked against the candidate query.
+
+    ``similarity`` is the raw cosine to the pathway centroid. When the
+    ranking is skill-aware (candidate skills passed to
+    :func:`match_pathways`), ``matched_skills`` is the subset of the
+    candidate's skills that the pathway's jobs actually require,
+    ``coverage`` is ``|matched_skills| / |skills|``, and ``score`` is the
+    blended ``SIM_WEIGHT * cosine + SKILL_WEIGHT * coverage`` value used
+    for display/ordering.
+    """
 
     key: str
     name: str
     description: str
     similarity: float
     match_count: int
+    matched_skills: list[str] = field(default_factory=list)
+    coverage: float = 0.0
+    score: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -307,6 +380,9 @@ class PathwayMatch:
             "name": self.name,
             "description": self.description,
             "similarity_score": round(float(self.similarity), 6),
+            "score": round(float(self.score), 6),
+            "coverage": round(float(self.coverage), 6),
+            "matched_skills": list(self.matched_skills),
             "match_count": self.match_count,
         }
 
@@ -317,9 +393,30 @@ def match_pathways(
     top_k: int = 3,
     index: JobIndex | None = None,
     pathway_index: PathwayIndex | None = None,
+    skills: Sequence[str] | None = None,
+    exclude_fallback: bool = False,
 ) -> list[PathwayMatch]:
-    """Rank every career pathway by cosine similarity between the
-    resume query vector and the pathway centroid. Returns the top-k."""
+    """Rank every career pathway against the candidate.
+
+    When ``skills`` is provided the ranking is *hybrid*: the cosine
+    similarity to the pathway centroid is blended with the fraction of
+    the candidate's extracted skills that the pathway's own jobs require.
+    The skill-overlap term is what makes the recommendation specific to
+    the person's resume — two technical resumes with different stacks get
+    different pathway rankings even when their paragraph embeddings are
+    nearly identical. Without ``skills`` the ranking is pure cosine
+    (backward compatible).
+
+    ``exclude_fallback=True`` drops the keyword-less catch-all
+    (``software-engineering``) from the ranking. Discovery mode uses this
+    because the catch-all is the bucket of *leftover* jobs — its skill
+    set is a near-superset of every other pathway's, so it would
+    otherwise dominate every resume and drown out the specific career
+    directions we actually want to recommend.
+
+    Returns the top-k, sorted by the blended score (or cosine when
+    ``skills`` is ``None``).
+    """
     if index is None:
         index = load_job_index()
     if pathway_index is None:
@@ -330,25 +427,56 @@ def match_pathways(
     if norm > 0:
         q = q / norm
 
-    scored: list[tuple[float, Pathway]] = []
-    for pathway in CAREER_PATHWAYS:
-        centroid = pathway_index.centroids[pathway.key]
-        sim = float(np.dot(centroid, q))
-        scored.append((sim, pathway))
+    skill_set: set[str] = {s.lower() for s in (skills or []) if s and s.strip()}
+    skill_aware = bool(skill_set)
 
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    top = scored[: max(top_k, 0)]
+    rows: list[tuple[float, float, list[str], Pathway]] = []
+    for pathway in CAREER_PATHWAYS:
+        if exclude_fallback and pathway.key == FALLBACK_PATHWAY_KEY:
+            continue
+        centroid = pathway_index.centroids[pathway.key]
+        cos = float(np.dot(centroid, q))
+        if skill_aware:
+            p_skills = pathway_index.skill_sets.get(pathway.key, frozenset())
+            matched = [s for s in skills if s.lower() in p_skills]
+            coverage = len(matched) / len(skill_set)
+        else:
+            matched = []
+            coverage = 0.0
+        rows.append((cos, coverage, matched, pathway))
+
+    if skill_aware:
+        # Normalise the cosine component across pathways to [0, 1] so the
+        # blend is scale-comparable with coverage, then order by score.
+        lo = min(r[0] for r in rows)
+        hi = max(r[0] for r in rows)
+        span = (hi - lo) or 1.0
+        rows.sort(
+            key=lambda r: SIM_WEIGHT * (r[0] - lo) / span + SKILL_WEIGHT * r[1],
+            reverse=True,
+        )
+    else:
+        lo = hi = span = 0.0
+        rows.sort(key=lambda r: r[0], reverse=True)
 
     out: list[PathwayMatch] = []
-    for sim, pathway in top:
+    for cos, coverage, matched, pathway in rows[: max(top_k, 0)]:
         positions = pathway_index.member_positions[pathway.key]
+        blended = (
+            SIM_WEIGHT * (cos - lo) / span + SKILL_WEIGHT * coverage
+            if skill_aware
+            else cos
+        )
         out.append(
             PathwayMatch(
                 key=pathway.key,
                 name=pathway.name,
                 description=pathway.description,
-                similarity=sim,
+                similarity=cos,
                 match_count=len(positions),
+                matched_skills=matched,
+                coverage=coverage,
+                score=blended,
             )
         )
     return out
@@ -386,6 +514,8 @@ def match_jobs_in_pathway(
 __all__ = [
     "CAREER_PATHWAYS",
     "FALLBACK_PATHWAY_KEY",
+    "SIM_WEIGHT",
+    "SKILL_WEIGHT",
     "Pathway",
     "PathwayIndex",
     "PathwayMatch",
