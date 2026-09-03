@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from django.urls import path
 
-from api.views import AnalyzeView, LearningResourcesView, PhasePlanView
+from api.views import AnalyzeView, LearningResourcesView, PhasePlanView, PathwayRoadmapView
 
 app_name = "api"
 
@@ -20,4 +20,5 @@ urlpatterns = [
     path("analyze/", AnalyzeView.as_view(), name="analyze"),
     path("learning-resources/", LearningResourcesView.as_view(), name="learning-resources"),
     path("phase-plan/", PhasePlanView.as_view(), name="phase-plan"),
+    path("pathway-roadmap/", PathwayRoadmapView.as_view(), name="pathway-roadmap"),
 ]

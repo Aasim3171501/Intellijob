@@ -373,9 +373,11 @@ class AnalyzeViewTests(TestCase):
     def test_discovery_with_no_ranked_pathway_returns_useful_roadmap(self) -> None:
         # If no pathway ranks high enough, the top-level roadmap must never
         # be an empty shell — otherwise the UI shows "No Roadmap Available".
-        from api.services import pathways
+        import api.services.pathways_market as pathways_market
+        import api.services.pathways as pathways_fixed
 
-        with mock.patch.object(pathways, "match_pathways", return_value=[]):
+        with mock.patch.object(pathways_market, "match_market_pathways", return_value=[]), \
+             mock.patch.object(pathways_fixed, "match_pathways", return_value=[]):
             resp = self.client.post(
                 "/api/analyze/",
                 data={"file": _uploaded_file(self.tiny_pdf, "r.pdf")},

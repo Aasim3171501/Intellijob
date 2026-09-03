@@ -76,8 +76,8 @@ export function RoadmapView({ roadmap, skills, targetTitle, matchedJobs, showTra
         </section>
       )}
 
-      {/* Career Trajectory */}
-      {(roadmap.career_trajectory?.length ?? 0) > 0 && (
+      {/* Career Trajectory (only when trajectory-only mode) */}
+      {showTrajectoryOnly && (roadmap.career_trajectory?.length ?? 0) > 0 && (
         <StrategicTrajectory phases={roadmap.career_trajectory} onSelect={setSelectedPhase} />
       )}
 

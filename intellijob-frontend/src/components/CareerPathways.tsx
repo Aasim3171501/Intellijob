@@ -1,4 +1,4 @@
-import { Compass, TrendingUp } from 'lucide-react';
+import { Compass, TrendingUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CareerPathway } from '@/types/api';
 
@@ -6,11 +6,13 @@ interface CareerPathwaysProps {
   pathways: CareerPathway[];
   activeKey: string | null;
   onSelect: (key: string) => void;
+  loadingKeys?: Set<string>;
+  isAnyLoading?: boolean;
 }
 
 const MEDALS = ['bg-primary-600 text-white', 'bg-slate-500 text-white', 'bg-slate-400 text-white'];
 
-export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathwaysProps) {
+export function CareerPathways({ pathways, activeKey, onSelect, loadingKeys, isAnyLoading }: CareerPathwaysProps) {
   if (!pathways.length) return null;
 
   return (
@@ -30,6 +32,9 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
         {pathways.map((pathway, index) => {
           const active = pathway.key === activeKey;
+          const isLoading = loadingKeys?.has(pathway.key);
+          // Disable all other cards when any pathway is loading
+          const isDisabled = isLoading || (isAnyLoading && !active && !isLoading);
           const scorePercent = Math.round((pathway.score ?? pathway.similarity_score) * 100);
           const matched = pathway.matched_skills ?? [];
           return (
@@ -38,11 +43,14 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
               type="button"
               onClick={() => onSelect(pathway.key)}
               aria-pressed={active}
+              disabled={isDisabled}
               className={cn(
                 'text-left rounded-xl border p-4 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary-500',
                 active
                   ? 'border-primary-600 ring-2 ring-primary-500 bg-primary-50'
-                  : 'border-slate-200 hover:border-primary-300 bg-white hover:bg-slate-50 hover:shadow-xl hover:scale-[1.02]'
+                  : 'border-slate-200 hover:border-primary-300 bg-white hover:bg-slate-50 hover:shadow-xl hover:scale-[1.02]',
+                isDisabled && 'opacity-50 cursor-not-allowed',
+                isLoading && 'opacity-60 cursor-wait'
               )}
             >
               <div className="flex items-center justify-between mb-1">
@@ -56,6 +64,12 @@ export function CareerPathways({ pathways, activeKey, onSelect }: CareerPathways
                     {index + 1}
                   </span>
                   <span className="font-semibold text-slate-900">{pathway.name}</span>
+                  {isLoading && (
+                    <Loader2 className="w-4 h-4 text-primary-600 animate-spin" aria-label="Loading roadmap" />
+                  )}
+                  {isAnyLoading && !isLoading && !active && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">Loading...</span>
+                  )}
                 </div>
                 <span
                   className={cn(

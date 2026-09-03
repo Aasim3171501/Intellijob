@@ -57,10 +57,6 @@ export function LearningSteps({ steps }: LearningStepsProps) {
                   </span>
                   <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                 </button>
-
-                <span className="pointer-events-none absolute right-14 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-medium text-white bg-slate-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                  Explore Step
-                </span>
               </div>
             </li>
           ))}

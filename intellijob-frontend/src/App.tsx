@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { FileText, Search, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { AnalyzeResponse } from '@/types/api';
+import type { AnalyzeResponse, Roadmap } from '@/types/api';
 import {
   Dropzone,
   SkillPills,
@@ -18,6 +18,8 @@ function App() {
   const [error, setError] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [selectedPathwayKey, setSelectedPathwayKey] = useState<string | null>(null);
+  const [loadingRoadmapKeys, setLoadingRoadmapKeys] = useState<Set<string>>(new Set());
+  const [roadmapCache, setRoadmapCache] = useState<Record<string, Roadmap>>({});
 
   const handleFileSelect = useCallback((file: File) => {
     if (file.name === 'removed' || file.name === 'invalid') {
@@ -45,6 +47,8 @@ function App() {
         target_title: targetTitle.trim(),
       });
       setResult(response);
+      setRoadmapCache({});
+      setLoadingRoadmapKeys(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze resume');
       setResult(null);
@@ -58,7 +62,47 @@ function App() {
     setTargetTitle('');
     setResult(null);
     setError(undefined);
+    setRoadmapCache({});
+    setLoadingRoadmapKeys(new Set());
   };
+
+  const loadPathwayRoadmap = useCallback(async (pathwayKey: string) => {
+    if (!result || loadingRoadmapKeys.has(pathwayKey) || roadmapCache[pathwayKey]) {
+      return;
+    }
+
+    const pathway = result.career_pathways.find(p => p.key === pathwayKey);
+    if (pathway?.roadmap) {
+      return; // Already has roadmap
+    }
+
+    setLoadingRoadmapKeys(prev => new Set(prev).add(pathwayKey));
+
+    try {
+      const response = await api.getPathwayRoadmap({
+        skills: result.extracted_skills,
+        pathway_key: pathwayKey,
+        target_title: targetTitle,
+      });
+      if (response.roadmap) {
+        setRoadmapCache(prev => ({ ...prev, [pathwayKey]: response.roadmap }));
+      }
+    } catch (err) {
+      console.error('Failed to load pathway roadmap:', err);
+    } finally {
+      setLoadingRoadmapKeys(prev => {
+        const next = new Set(prev);
+        next.delete(pathwayKey);
+        return next;
+      });
+    }
+  }, [result, loadingRoadmapKeys, roadmapCache, targetTitle]);
+
+  const handlePathwaySelect = useCallback((key: string) => {
+    setSelectedPathwayKey(key);
+    // Trigger lazy loading if roadmap not yet loaded
+    loadPathwayRoadmap(key);
+  }, [loadPathwayRoadmap]);
 
   const isDiscovery =
     result?.career_mode === 'discovery' && (result.career_pathways?.length ?? 0) > 0;
@@ -69,8 +113,14 @@ function App() {
       ? result.career_pathways.find((p) => p.key === selectedPathwayKey) ??
         result.career_pathways[0]
       : null;
+  
+  // Use cached roadmap if available, otherwise fall back to pathway's roadmap
+  const activeRoadmap = activePathway 
+    ? (roadmapCache[activePathway.key] ?? activePathway.roadmap) 
+    : result?.roadmap;
+  
   const viewMatches = activePathway ? activePathway.matches : (result?.matches ?? []);
-  const viewRoadmap = activePathway ? activePathway.roadmap : result?.roadmap;
+  const viewRoadmap = activeRoadmap;
   const roleTitles =
     viewRoadmap?.matched_jobs?.length
       ? viewRoadmap.matched_jobs
@@ -212,7 +262,9 @@ function App() {
               <CareerPathways
                 pathways={result.career_pathways}
                 activeKey={activePathway?.key ?? selectedPathwayKey}
-                onSelect={setSelectedPathwayKey}
+                onSelect={handlePathwaySelect}
+                loadingKeys={loadingRoadmapKeys}
+                isAnyLoading={loadingRoadmapKeys.size > 0}
               />
             )}
 
@@ -260,14 +312,39 @@ function App() {
               <div className="lg:col-span-2 space-y-6">
                 <MatchedRoles titles={roleTitles} />
 
-                {viewRoadmap && (
+{activePathway && loadingRoadmapKeys.has(activePathway.key) ? (
+                  <section aria-live="polite" aria-busy="true">
+                    <div className="bg-white rounded-xl border border-slate-200 p-8">
+                      <div className="flex flex-col items-center justify-center py-12 gap-4">
+                        <div className="w-10 h-10 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                        <div className="text-center">
+                          <p className="text-lg font-medium text-slate-900">Loading roadmap for {activePathway.name}...</p>
+                          <p className="text-sm text-slate-500 mt-1">Analysing skill gaps and generating your learning plan</p>
+                        </div>
+                      </div>
+                      <div className="mt-6 space-y-3">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="h-8 bg-slate-100 rounded animate-pulse w-full" />
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                ) : viewRoadmap ? (
+                  <>
+                    <section>
+                      <RoadmapView
+                        roadmap={viewRoadmap}
+                        skills={result.extracted_skills}
+                        targetTitle={targetTitle}
+                        matchedJobs={roleTitles}
+                      />
+                    </section>
+                  </>
+                ) : (
                   <section>
-                    <RoadmapView
-                      roadmap={viewRoadmap}
-                      skills={result.extracted_skills}
-                      targetTitle={targetTitle}
-                      matchedJobs={roleTitles}
-                    />
+                    <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+                      Select a career pathway to see your personalized roadmap
+                    </div>
                   </section>
                 )}
               </div>

@@ -91,3 +91,8 @@ export interface PhasePlan {
   resource_priorities: string[];
   resources: Record<string, LearningResource[]>;
 }
+
+export interface RoadmapResponse {
+  roadmap: Roadmap;
+  status: 'generated' | 'error';
+}

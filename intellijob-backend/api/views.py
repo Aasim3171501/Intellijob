@@ -27,7 +27,6 @@ Two modes:
 The view deliberately wires through the existing service modules — no
 business logic lives here.
 """
-
 from __future__ import annotations
 
 import logging
@@ -38,13 +37,19 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.services import matcher, pathways
+from api.services import matcher
+from api.services import pathways as pathways_fixed
+from api.services import pathways_market as pathways_market
 from api.services.learning_agent import search_learning_resources
 from api.services.roadmap_generator import generate_phase_plan, generate_roadmap
 from api.services.skill_extractor import (
     extract_skills_from_text,
     extract_text_from_pdf,
 )
+
+import os
+def _use_market_pathways() -> bool:
+    return os.getenv("USE_MARKET_PATHWAYS", "true").lower() == "true"
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +59,7 @@ DEFAULT_TOP_K = 5
 #: Discovery-mode pathway filtering.
 MIN_PATHWAY_SCORE = 0.30
 MIN_PATHWAY_COVERAGE = 0.15
-MAX_PATHWAYS = 8
+MAX_PATHWAYS = 4
 MIN_PATHWAYS_FLOOR = 3
 
 
@@ -143,11 +148,101 @@ class AnalyzeView(APIView):
         )
 
     def _discovery_response(self, skills, query_vec, index):
-        """Career-discovery mode: rank the pathway taxonomy, then produce
+        """Career-discovery mode: rank pathways, then produce
         matches + a strategic roadmap for each recommended pathway."""
-        pathway_index = pathways.build_pathway_index(index)
+        if _use_market_pathways():
+            return self._discovery_response_market(skills, query_vec, index)
+        else:
+            return self._discovery_response_fixed(skills, query_vec, index)
+
+    def _discovery_response_market(self, skills, query_vec, index):
+        """Market-driven discovery response - only generates roadmap for pathway #1."""
+        pathway_index = pathways_market.build_market_pathway_index(index)
+
+        # Get all clusters ranked by similarity
+        ranked = pathways_market.match_market_pathways(
+            query_vec,
+            top_k=len(pathway_index.pathways),
+            index=index,
+            pathway_index=pathway_index,
+            skills=skills,
+        )
+
+        # Filter by score threshold
+        filtered = [
+            pw for pw in ranked
+            if pw.similarity_score >= MIN_PATHWAY_SCORE
+        ]
+
+        # Ensure at least MIN_PATHWAYS_FLOOR visible, cap at MAX_PATHWAYS
+        if len(filtered) < MIN_PATHWAYS_FLOOR:
+            visible = ranked[:MIN_PATHWAYS_FLOOR]
+        else:
+            visible = filtered[:MAX_PATHWAYS]
+
+        # Additional pathways for "Show more" section
+        additional = [pw for pw in ranked if pw not in visible]
+
+        career_pathways: list[dict] = []
+        career_pathways_additional: list[dict] = []
+
+        def _build(pw, index_in_visible: int):
+            pw_matches = pathways_market.match_jobs_in_market_pathway(
+                query_vec, pw.key, top_k=DEFAULT_TOP_K,
+                index=index, pathway_index=pathway_index,
+            )
+            # Only generate roadmap for the first pathway (index 0)
+            if index_in_visible == 0:
+                roadmap = generate_roadmap(skills, pw_matches)
+            else:
+                roadmap = None  # Lazy-load on demand
+            return {
+                **pw.to_dict(),
+                "matches": [m.to_dict() for m in pw_matches],
+                "roadmap": roadmap.to_dict() if roadmap else None,
+            }
+
+        # Build visible pathways (parallel)
+        max_workers = min(MAX_PATHWAYS, len(visible)) if visible else 1
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            career_pathways = list(pool.map(lambda args: _build(*args), [(pw, i) for i, pw in enumerate(visible)]))
+
+        # Build additional pathways (sequential, lighter - no roadmap needed for "Show more")
+        for pw in additional:
+            career_pathways_additional.append({
+                **pw.to_dict(),
+                "matches": [],
+                "roadmap": None,
+            })
+
+        # Top-level matches/roadmap mirror the #1 pathway
+        if career_pathways:
+            top_matches = career_pathways[0]["matches"]
+            roadmap = career_pathways[0]["roadmap"]
+        else:
+            fallback_matches = matcher.match_jobs(
+                query_vec, top_k=DEFAULT_TOP_K, index=index,
+            )
+            top_matches = [m.to_dict() for m in fallback_matches]
+            roadmap = generate_roadmap(skills, fallback_matches).to_dict()
+
+        return Response(
+            {
+                "extracted_skills": skills,
+                "career_mode": "discovery",
+                "career_pathways": career_pathways,
+                "career_pathways_additional": career_pathways_additional,
+                "matches": top_matches,
+                "roadmap": roadmap,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def _discovery_response_fixed(self, skills, query_vec, index):
+        """Fixed taxonomy discovery response - only generates roadmap for pathway #1."""
+        pathway_index = pathways_fixed.build_pathway_index(index)
         # Get all pathways ranked (no top_k limit) so we can filter by threshold
-        ranked = pathways.match_pathways(
+        ranked = pathways_fixed.match_pathways(
             query_vec,
             top_k=len(pathway_index.skill_sets),  # all pathways
             index=index,
@@ -174,28 +269,32 @@ class AnalyzeView(APIView):
         career_pathways: list[dict] = []
         career_pathways_additional: list[dict] = []
 
-        def _build(pw):
-            pw_matches = pathways.match_jobs_in_pathway(
+        def _build(pw, index_in_visible: int):
+            pw_matches = pathways_fixed.match_jobs_in_pathway(
                 query_vec, pw.key, top_k=DEFAULT_TOP_K,
                 index=index, pathway_index=pathway_index,
             )
-            roadmap = generate_roadmap(skills, pw_matches)
+            # Only generate roadmap for the first pathway (index 0)
+            if index_in_visible == 0:
+                roadmap = generate_roadmap(skills, pw_matches)
+            else:
+                roadmap = None  # Lazy-load on demand
             return {
                 **pw.to_dict(),
                 "matches": [m.to_dict() for m in pw_matches],
-                "roadmap": roadmap.to_dict(),
+                "roadmap": roadmap.to_dict() if roadmap else None,
             }
 
         # Build visible pathways (parallel)
         max_workers = min(MAX_PATHWAYS, len(visible)) if visible else 1
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            career_pathways = list(pool.map(_build, visible))
+            career_pathways = list(pool.map(lambda args: _build(*args), [(pw, i) for i, pw in enumerate(visible)]))
 
         # Build additional pathways (sequential, lighter - no roadmap needed for "Show more")
         for pw in additional:
             career_pathways_additional.append({
                 **pw.to_dict(),
-                "matches": [],  # not needed for collapsed view
+                "matches": [],
                 "roadmap": None,
             })
 
@@ -248,6 +347,53 @@ class LearningResourcesView(APIView):
             )
 
 
+class PathwayRoadmapView(APIView):
+    """Generate a roadmap for a specific pathway on demand (lazy-loading)."""
+
+    def post(self, request, *args, **kwargs):
+        skills = request.data.get("skills", [])
+        target_title = (request.data.get("target_title") or "").strip()
+        pathway_key = (request.data.get("pathway_key") or "").strip()
+
+        if not pathway_key:
+            return Response(
+                {"error": "Missing 'pathway_key'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            # Load index and embed query
+            index = matcher.load_job_index()
+            query_vec = matcher.embed_query(skills, target_title, resume_context="")
+
+            if USE_MARKET_PATHWAYS:
+                from api.services import pathways_market as pathways_mod
+                pathway_index = pathways_mod.build_market_pathway_index(index)
+                pw_matches = pathways_mod.match_jobs_in_market_pathway(
+                    query_vec, pathway_key, top_k=DEFAULT_TOP_K,
+                    index=index, pathway_index=pathway_index,
+                )
+            else:
+                from api.services import pathways
+                pathway_index = pathways.build_pathway_index(index)
+                pw_matches = pathways.match_jobs_in_pathway(
+                    query_vec, pathway_key, top_k=DEFAULT_TOP_K,
+                    index=index, pathway_index=pathway_index,
+                )
+
+            roadmap = generate_roadmap(skills, pw_matches)
+            return Response(
+                {"roadmap": roadmap.to_dict(), "status": "generated"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            log.exception("Phase roadmap generation failed")
+            return Response(
+                {"error": f"Roadmap generation failed: {e!s}", "status": "error"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
 class PhasePlanView(APIView):
     """Generate a personalized phase action plan using the LLM + Tavily."""
 
@@ -291,5 +437,50 @@ class PhasePlanView(APIView):
             log.exception("Phase plan generation failed")
             return Response(
                 {"error": f"Phase plan generation failed: {e!s}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PathwayRoadmapView(APIView):
+    """Lazy-load roadmap for a specific career pathway in discovery mode."""
+
+    def post(self, request, *args, **kwargs):
+        skills = request.data.get("skills", [])
+        pathway_key = (request.data.get("pathway_key") or "").strip()
+        target_title = (request.data.get("target_title") or "").strip()
+        is_market = os.getenv("USE_MARKET_PATHWAYS", "true").lower() == "true"
+
+        if not skills or not pathway_key:
+            return Response(
+                {"error": "Missing 'skills' or 'pathway_key'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            index = matcher.load_job_index()
+            query_vec = matcher.embed_query(skills, target_title)
+
+            if is_market:
+                pathway_index = pathways_market.build_market_pathway_index(index)
+                pw_matches = pathways_market.match_jobs_in_market_pathway(
+                    query_vec, pathway_key, top_k=DEFAULT_TOP_K,
+                    index=index, pathway_index=pathway_index,
+                )
+            else:
+                pathway_index = pathways_fixed.build_pathway_index(index)
+                pw_matches = pathways_fixed.match_jobs_in_pathway(
+                    query_vec, pathway_key, top_k=DEFAULT_TOP_K,
+                    index=index, pathway_index=pathway_index,
+                )
+
+            roadmap = generate_roadmap(skills, pw_matches)
+            return Response(
+                {"roadmap": roadmap.to_dict(), "status": "generated"},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            log.exception("Pathway roadmap generation failed")
+            return Response(
+                {"error": f"Roadmap generation failed: {e!s}", "status": "error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

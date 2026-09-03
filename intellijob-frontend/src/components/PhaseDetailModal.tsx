@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  AlertTriangle,
   ArrowRight,
   Briefcase,
   CheckCircle,
@@ -78,6 +79,7 @@ export function PhaseDetailModal({ phase, onClose, skills, targetTitle, matchedJ
   const [plan, setPlan] = useState<PhasePlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [isFallback, setIsFallback] = useState(false);
 
   useEffect(() => {
     const skillsToLoad = [...new Set([...phase.required_skills, ...phase.next_phase_unlocks])];
@@ -93,7 +95,7 @@ export function PhaseDetailModal({ phase, onClose, skills, targetTitle, matchedJ
     });
   }, [phase]);
 
-  const generatePlan = async () => {
+  const doGeneratePlan = async () => {
     setPlanLoading(true);
     setPlanError(null);
     try {
@@ -105,11 +107,20 @@ export function PhaseDetailModal({ phase, onClose, skills, targetTitle, matchedJ
         matched_jobs: matchedJobs,
       });
       setPlan(result);
+      setIsFallback(false);
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : 'Failed to generate plan');
     } finally {
       setPlanLoading(false);
     }
+  };
+
+  const handleGeneratePlan = () => {
+    doGeneratePlan();
+  };
+
+  const handleRetryWithAI = () => {
+    doGeneratePlan();
   };
 
   useEffect(() => {
@@ -144,7 +155,7 @@ export function PhaseDetailModal({ phase, onClose, skills, targetTitle, matchedJ
         {!plan && !planLoading && (
           <div className="text-center py-8">
             <button
-              onClick={generatePlan}
+              onClick={handleGeneratePlan}
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
             >
               <Sparkles className="w-5 h-5" />
@@ -176,7 +187,7 @@ export function PhaseDetailModal({ phase, onClose, skills, targetTitle, matchedJ
         {planError && !planLoading && (
           <div className="text-center py-8">
             <button
-              onClick={generatePlan}
+              onClick={handleRetryWithAI}
               className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
             >
               <Sparkles className="w-5 h-5" />
@@ -189,6 +200,28 @@ export function PhaseDetailModal({ phase, onClose, skills, targetTitle, matchedJ
         {/* Generated Plan Display */}
         {plan && (
           <div className="space-y-6">
+            {/* Fallback warning banner */}
+            {isFallback ? (
+              <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800 flex-1">
+                  <span className="font-medium">Deterministic Mode:</span>{' '}
+                  AI generation fell back to deterministic plan (rate limit or timeout).
+                </div>
+                <button
+                  onClick={handleRetryWithAI}
+                  disabled={planLoading}
+                  className="ml-auto flex-shrink-0 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {planLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    'Retry with AI'
+                  )}
+                </button>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-lg font-semibold text-slate-900">Your {plan.total_weeks}-Week Action Plan</h4>
               <button

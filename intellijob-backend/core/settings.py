@@ -11,12 +11,16 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 from dotenv import load_dotenv
 
 # Load environment variables from the project-root .env (API keys etc.)
 # before settings are evaluated. Idempotent — safe if already loaded.
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+# Use market-driven pathways in production, fixed taxonomy in tests
+os.environ.setdefault("USE_MARKET_PATHWAYS", "true")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

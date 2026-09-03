@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosInstance, AxiosError } from 'axios';
-import type { AnalyzeResponse, AnalyzeRequest, LearningResource, PhasePlan } from '@/types/api';
+import type { AnalyzeResponse, AnalyzeRequest, LearningResource, PhasePlan, RoadmapResponse } from '@/types/api';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -51,6 +51,18 @@ class ApiClient {
     matched_jobs: string[];
   }): Promise<PhasePlan> {
     const response = await this.client.post<PhasePlan>('/phase-plan/', data, {
+      timeout: 200000, // 200s - must exceed backend LLM_TIMEOUT_SECONDS (180s)
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return response.data;
+  }
+
+  async getPathwayRoadmap(data: {
+    skills: string[];
+    pathway_key: string;
+    target_title: string;
+  }): Promise<RoadmapResponse> {
+    const response = await this.client.post<RoadmapResponse>('/pathway-roadmap/', data, {
       timeout: 200000, // 200s - must exceed backend LLM_TIMEOUT_SECONDS (180s)
       headers: { 'Content-Type': 'application/json' },
     });

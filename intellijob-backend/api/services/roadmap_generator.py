@@ -783,7 +783,6 @@ class _OllamaRoadmapClient:
         except (KeyError, IndexError, TypeError):
             content = ""
         content = content if isinstance(content, str) else str(content)
-        _console_print(f"[OLLAMA] {self._model} returned {len(content)} chars:\n{content}")
         log.warning("Ollama Cloud %s returned %d chars", self._model, len(content))
         if not content:
             log.warning(
