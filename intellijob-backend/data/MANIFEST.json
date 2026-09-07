@@ -1,0 +1,30 @@
+{
+  "api_calls_used": 30,
+  "country": "GB",
+  "csv_filename": "uk_software_jobs.csv",
+  "csv_sha256": "7dc2aed36eb0e198bad899a7d218605e82854ef22552cf527bcb3d51004d0d2e",
+  "generated_at_utc": "2026-07-22T20:48:28+00:00",
+  "locations": [
+    "London",
+    "Manchester",
+    "Edinburgh"
+  ],
+  "max_pages": 1,
+  "queries": [
+    "software engineer",
+    "software developer",
+    "data scientist",
+    "data engineer",
+    "data analyst",
+    "devops engineer",
+    "machine learning engineer",
+    "backend developer",
+    "frontend developer",
+    "full stack developer"
+  ],
+  "results_per_page": 50,
+  "row_count": 1056,
+  "row_count_unique": 1056,
+  "schema_version": 1,
+  "source": "Adzuna Jobs API (https://developer.adzuna.com/)"
+}

@@ -33,44 +33,26 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-m4x$1_d_3p1af!kmlqqlx^rujg6d1+lg&8^wfam=0@vt)pnc3s'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = []
-
-
-# Application definition
-
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    # Third-party
-    'rest_framework',
-    'corsheaders',
-    # Local
-    'api.apps.ApiConfig',
+# Hosts: allow Render domain + Netlify frontend + localhost
+ALLOWED_HOSTS = [
+    h.strip() for h in os.getenv(
+        "ALLOWED_HOSTS",
+        "localhost,127.0.0.1,.onrender.com,.netlify.app"
+    ).split(",") if h.strip()
 ]
 
-MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # must be before CommonMiddleware
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
-
-# CORS — allow the local Vite dev server during development.
-# Tighten for production via env vars.
+# CORS: allow Netlify frontend + Render backend
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
+    o.strip() for o in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,https://*.netlify.app"
+    ).split(",") if o.strip()
 ]
+
+# Allow credentials for session auth if needed later
+CORS_ALLOW_CREDENTIALS = True
 
 # DRF — anonymous read access for the demo / dissertation.
 REST_FRAMEWORK = {

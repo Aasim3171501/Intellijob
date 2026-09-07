@@ -1,0 +1,726 @@
+[
+  {
+    "cluster_id": 6,
+    "name": "DevOps & Cloud Engineering",
+    "description": "92 UK job postings in Game Development",
+    "size": 92,
+    "top_keywords": [
+      "data",
+      "software",
+      "engineer",
+      "role",
+      "software engineer",
+      "connect",
+      "collaborating",
+      "exceptional",
+      "professionals",
+      "lead"
+    ],
+    "typical_titles": [
+      "DevOps Engineer",
+      "Software Engineer",
+      "Data Engineer",
+      "Senior Software Engineer",
+      "Senior Vice President, Full-Stack Engineer"
+    ]
+  },
+  {
+    "cluster_id": 2,
+    "name": "Data Analytics",
+    "description": "81 UK job postings in Data Analytics",
+    "size": 81,
+    "top_keywords": [
+      "data",
+      "analyst",
+      "data analyst",
+      "role",
+      "business",
+      "000",
+      "pricing",
+      "programme",
+      "looking",
+      "work"
+    ],
+    "typical_titles": [
+      "Data Analyst",
+      "Pricing Analyst",
+      "Senior Product Analyst",
+      "Data Analyst Placement Programme No Experience Needed",
+      "Financial Crime Data Analyst"
+    ]
+  },
+  {
+    "cluster_id": 24,
+    "name": "Azure DevOps Engineering",
+    "description": "54 UK job postings in DevOps & Cloud",
+    "size": 54,
+    "top_keywords": [
+      "devops",
+      "engineer",
+      "devops engineer",
+      "experience",
+      "role",
+      "infrastructure",
+      "cloud",
+      "software",
+      "000",
+      "senior"
+    ],
+    "typical_titles": [
+      "DevOps Engineer",
+      "Senior Software Engineer",
+      "Senior DevOps Engineer",
+      "Azure DevOps Engineer",
+      "DevOps Engineers"
+    ]
+  },
+  {
+    "cluster_id": 9,
+    "name": "Machine Learning Engineering",
+    "description": "40 UK job postings in Data Science / AI",
+    "size": 40,
+    "top_keywords": [
+      "learning",
+      "machine",
+      "machine learning",
+      "engineer",
+      "learning engineer",
+      "ai",
+      "world",
+      "data",
+      "senior",
+      "real"
+    ],
+    "typical_titles": [
+      "Machine Learning Engineer",
+      "Senior Machine Learning Engineer",
+      "Data Analyst",
+      "Principal Machine Learning Engineer (Live Sports Insights)",
+      "Machine Learning Engineer (Mid-Snr)"
+    ]
+  },
+  {
+    "cluster_id": 20,
+    "name": "Frontend Development",
+    "description": "39 UK job postings in Frontend Development",
+    "size": 39,
+    "top_keywords": [
+      "frontend",
+      "developer",
+      "engineer",
+      "react",
+      "frontend developer",
+      "frontend engineer",
+      "software",
+      "experience",
+      "ll",
+      "senior"
+    ],
+    "typical_titles": [
+      "Frontend Developer - React",
+      "Founding Frontend Engineer",
+      "Software Developer",
+      "Web Developer Intern - Remote",
+      "Backend Developer (Node.js / TypeScript)"
+    ]
+  },
+  {
+    "cluster_id": 15,
+    "name": "Full Stack Development",
+    "description": "34 UK job postings in Data Science / AI",
+    "size": 34,
+    "top_keywords": [
+      "stack",
+      "developer",
+      "stack developer",
+      "development",
+      "team",
+      "ai",
+      "join",
+      "engineer",
+      "role",
+      "platform"
+    ],
+    "typical_titles": [
+      "Full Stack Developer",
+      "Fullstack Engineer",
+      "Full-stack Developer/Engineer",
+      "Full-Stack Development- Consultant",
+      "Full Stack Software Developer"
+    ]
+  },
+  {
+    "cluster_id": 18,
+    "name": "Full Stack Software Engineering",
+    "description": "32 UK job postings in DevOps & Cloud",
+    "size": 32,
+    "top_keywords": [
+      "software",
+      "engineer",
+      "software engineer",
+      "solutions",
+      "people",
+      "engineering",
+      "team",
+      "technology",
+      "digital",
+      "developer"
+    ],
+    "typical_titles": [
+      "Software Engineer",
+      "Software Developer",
+      "Principal Software Development Engineer",
+      "Software Developer \u2013 Build Innovative Digital Payment Solutions",
+      "Software Development Director"
+    ]
+  },
+  {
+    "cluster_id": 25,
+    "name": "Data Engineering & AI",
+    "description": "31 UK job postings in Data Science / AI",
+    "size": 31,
+    "top_keywords": [
+      "data",
+      "engineer",
+      "data engineer",
+      "000",
+      "role",
+      "contract",
+      "ai",
+      "london",
+      "opportunity",
+      "organisation"
+    ],
+    "typical_titles": [
+      "Data Engineer",
+      "Data Scientist",
+      "Senior Data Engineer",
+      "Lead Data Engineer - London",
+      "Head of Labs, Data Science, AI, LLMs, SLMs, Agentic AI, Remote"
+    ]
+  },
+  {
+    "cluster_id": 27,
+    "name": "Data Engineering & Analytics",
+    "description": "30 UK job postings in Data Science / AI",
+    "size": 30,
+    "top_keywords": [
+      "data",
+      "engineer",
+      "data engineer",
+      "ai",
+      "role",
+      "ll",
+      "business",
+      "work",
+      "pipelines",
+      "analytics"
+    ],
+    "typical_titles": [
+      "Data Engineer",
+      "Data Scientist",
+      "AI Data Engineer",
+      "AI Data Engineer - KDB",
+      "Full stack developer"
+    ]
+  },
+  {
+    "cluster_id": 21,
+    "name": "Full Stack .NET Development",
+    "description": "28 UK job postings in Frontend Development",
+    "size": 28,
+    "top_keywords": [
+      "experience",
+      "000",
+      "software",
+      "stack",
+      "developer",
+      "stack developer",
+      "strong",
+      "engineer",
+      "net",
+      "development"
+    ],
+    "typical_titles": [
+      "Full Stack .NET Engineer",
+      "Full Stack Developer",
+      "Senior Full Stack Developer",
+      "Software Developer",
+      "Senior Software Developer"
+    ]
+  },
+  {
+    "cluster_id": 13,
+    "name": "AI Solutions Architecture",
+    "description": "27 UK job postings in Data Science / AI",
+    "size": 27,
+    "top_keywords": [
+      "ai",
+      "engineer",
+      "software",
+      "ai engineer",
+      "senior",
+      "enterprise",
+      "architect",
+      "solutions",
+      "technology",
+      "role"
+    ],
+    "typical_titles": [
+      "AI Solution Architect - Senior Manager/Associate Director Capital Markets",
+      "Senior AI Engineer",
+      "Founding Software Engineer",
+      "Software Development Engineer, Rufus",
+      "Lead/Senior Lead Software Engineer - Agentic AI Engineering (Enterprise Asset Management)"
+    ]
+  },
+  {
+    "cluster_id": 16,
+    "name": "Backend Development",
+    "description": "27 UK job postings in Backend Development",
+    "size": 27,
+    "top_keywords": [
+      "software",
+      "developer",
+      "senior",
+      "engineer",
+      "senior software",
+      "software engineer",
+      "software developer",
+      "team",
+      "development",
+      "backend"
+    ],
+    "typical_titles": [
+      "Senior Software Engineer",
+      "Senior Software Developer",
+      "Software Developer Intern",
+      "Software Developer Backend (SFIA5)",
+      "Software Developer-Backend (SFIA4)"
+    ]
+  },
+  {
+    "cluster_id": 28,
+    "name": "Data Science & Engineering",
+    "description": "27 UK job postings in Data Science / AI",
+    "size": 27,
+    "top_keywords": [
+      "data",
+      "scientist",
+      "data scientist",
+      "senior",
+      "senior data",
+      "role",
+      "team",
+      "engineer",
+      "data engineer",
+      "solutions"
+    ],
+    "typical_titles": [
+      "Data Scientist",
+      "Senior Data Engineer",
+      "Senior Data Scientist",
+      "Senior Software Developer",
+      "Data Scientists"
+    ]
+  },
+  {
+    "cluster_id": 7,
+    "name": "AI Leadership & Analytics",
+    "description": "27 UK job postings in Data Science / AI",
+    "size": 27,
+    "top_keywords": [
+      "financial",
+      "data",
+      "global",
+      "company",
+      "world",
+      "global financial",
+      "ai",
+      "president",
+      "vice president",
+      "vice"
+    ],
+    "typical_titles": [
+      "Senior Vice President, Full-Stack Engineer",
+      "Data Analyst",
+      "Data Scientist",
+      "Data Scientist - Applied AI (Go-To-Market)",
+      "AI Software Developer"
+    ]
+  },
+  {
+    "cluster_id": 11,
+    "name": "Python Backend & Reliability",
+    "description": "23 UK job postings in Data Science / AI",
+    "size": 23,
+    "top_keywords": [
+      "python",
+      "ai",
+      "backend",
+      "developer",
+      "senior",
+      "experience",
+      "engineer",
+      "software",
+      "join",
+      "python developer"
+    ],
+    "typical_titles": [
+      "Senior Backend Developer",
+      "Lead Site Reliability Engineer (SRE Squad Lead)",
+      "Senior Site Reliability Engineer - Python",
+      "Chatbot Developer (WhatsApp, Telegram, Discord) - Freelance",
+      "Python Backend Developer"
+    ]
+  },
+  {
+    "cluster_id": 10,
+    "name": "Java Backend Development",
+    "description": "21 UK job postings in Backend Development",
+    "size": 21,
+    "top_keywords": [
+      "java",
+      "engineer",
+      "stack",
+      "developer",
+      "java stack",
+      "backend",
+      "stack engineer",
+      "software",
+      "000",
+      "london"
+    ],
+    "typical_titles": [
+      "Java Full Stack Engineer",
+      "Senior Java Full Stack Engineer",
+      "Software Developer",
+      "Senior Java Backend Developer",
+      "Java Backend Developer - London, UK (Fully REMOTE)"
+    ]
+  },
+  {
+    "cluster_id": 0,
+    "name": "FinTech Software Engineering",
+    "description": "20 UK job postings in Embedded Systems",
+    "size": 20,
+    "top_keywords": [
+      "wise",
+      "money",
+      "company",
+      "global",
+      "team",
+      "wise global",
+      "way manage",
+      "way",
+      "technology",
+      "wise connect"
+    ],
+    "typical_titles": [
+      "Software Engineer - Fincrime - Scam Prevention",
+      "Senior Software Engineer - Marketing Platform",
+      "Senior Software Engineer II - Assets",
+      "Senior Software Engineer I - Receive",
+      "Senior Software Engineer, Business Pricing"
+    ]
+  },
+  {
+    "cluster_id": 19,
+    "name": "Software Development Management",
+    "description": "18 UK job postings in Backend Development",
+    "size": 18,
+    "top_keywords": [
+      "software",
+      "development",
+      "manager",
+      "development manager",
+      "business",
+      "software development",
+      "engineering",
+      "new",
+      "business development",
+      "sales"
+    ],
+    "typical_titles": [
+      "Software Development Manager",
+      "Engineering Manager (Golang)",
+      "Software Business Development Manager",
+      "Web Delivery Manager",
+      "Software Development Manager - Law - Manchester"
+    ]
+  },
+  {
+    "cluster_id": 3,
+    "name": "Senior Data Engineering",
+    "description": "17 UK job postings in Game Development",
+    "size": 17,
+    "top_keywords": [
+      "engineer",
+      "software",
+      "software engineer",
+      "role",
+      "raytheon",
+      "data",
+      "senior",
+      "principal",
+      "range",
+      "salary"
+    ],
+    "typical_titles": [
+      "Senior Data Engineer",
+      "Principal Software Engineer",
+      "Principal Software Engineer (Hybrid)",
+      "Principal Software Engineer (London)",
+      "Lead Software Engineer (Hybrid)"
+    ]
+  },
+  {
+    "cluster_id": 12,
+    "name": "Lead Data Science",
+    "description": "16 UK job postings in Data Engineering",
+    "size": 16,
+    "top_keywords": [
+      "data",
+      "lead",
+      "scientist",
+      "data scientist",
+      "lead data",
+      "role",
+      "digital",
+      "team",
+      "services",
+      "sports"
+    ],
+    "typical_titles": [
+      "Lead Data Engineer",
+      "Lead Data Scientist",
+      "Data Scientist",
+      "Principal Data Scientist",
+      "Lead Data Scientist, Sports"
+    ]
+  },
+  {
+    "cluster_id": 17,
+    "name": "Cloud & DevOps Engineering",
+    "description": "16 UK job postings in Frontend Development",
+    "size": 16,
+    "top_keywords": [
+      "ll",
+      "work",
+      "aws",
+      "cloud",
+      "devops",
+      "build",
+      "infrastructure",
+      "required",
+      "consulting",
+      "clients"
+    ],
+    "typical_titles": [
+      "Senior Full Stack Developer - eSC/eDV Clearance",
+      "Higher Education Account Manager, UK Education",
+      "Chief Engineer, Data Centre Engineering Operations, Data Centre Engineering Operations",
+      "Military Data Centre Engineering Operations (DCEO), Amazon Web Services (AWS)",
+      "Senior DevOps Engineer - AWS Infrastructure Architect"
+    ]
+  },
+  {
+    "cluster_id": 1,
+    "name": "Secure DevOps Engineering",
+    "description": "15 UK job postings in DevOps & Cloud",
+    "size": 15,
+    "top_keywords": [
+      "devops",
+      "engineer",
+      "devops engineer",
+      "cloud",
+      "principal",
+      "principal devops",
+      "senior",
+      "cleared",
+      "edv cleared",
+      "edv"
+    ],
+    "typical_titles": [
+      "DevOps Engineer- eDV Cleared",
+      "Cloud Native DevOps Engineer- SC Cleared",
+      "Senior DevOps Engineer- eDV Cleared",
+      "Principal DevOps Engineer- SC Cleared",
+      "Lead/ Principal DevOps Engineer- eDV Cleared"
+    ]
+  },
+  {
+    "cluster_id": 23,
+    "name": "Embedded Software Engineering",
+    "description": "14 UK job postings in Game Development",
+    "size": 14,
+    "top_keywords": [
+      "software",
+      "engineer",
+      "software engineer",
+      "working",
+      "test",
+      "000",
+      "manchester",
+      "embedded",
+      "cyber",
+      "embedded software"
+    ],
+    "typical_titles": [
+      "Software Engineer",
+      "Cyber Software Engineer",
+      "Embedded Software Engineer",
+      "Software Developer in Test",
+      "Software Engineer in Test"
+    ]
+  },
+  {
+    "cluster_id": 5,
+    "name": "Trading Software Development",
+    "description": "14 UK job postings in Embedded Systems",
+    "size": 14,
+    "top_keywords": [
+      "employees",
+      "software",
+      "developer",
+      "000",
+      "software developer",
+      "role",
+      "bet365",
+      "leading",
+      "professionals",
+      "exceptional professionals"
+    ],
+    "typical_titles": [
+      "Software Developer - T&T",
+      "Software Developer, In-Play",
+      "Software Developer (SC)",
+      "Senior Software Developer, Verification",
+      "Software Developer, Trading and Tools"
+    ]
+  },
+  {
+    "cluster_id": 8,
+    "name": "C# Backend Development",
+    "description": "12 UK job postings in Game Development",
+    "size": 12,
+    "top_keywords": [
+      "software",
+      "senior",
+      "developer",
+      "team",
+      "net",
+      "trading",
+      "engineer",
+      "software engineer",
+      "software developer",
+      "development"
+    ],
+    "typical_titles": [
+      "C# Software Developer",
+      "C# backend Developer",
+      "Senior Backend Developer (C# .NET)",
+      "C# Software Engineer - Learn Rust",
+      "Senior .Net Back End Developer"
+    ]
+  },
+  {
+    "cluster_id": 22,
+    "name": "Data Science & Analytics",
+    "description": "12 UK job postings in Frontend Development",
+    "size": 12,
+    "top_keywords": [
+      "travel",
+      "data",
+      "work",
+      "technology",
+      "global",
+      "world",
+      "scientist",
+      "data scientist",
+      "building",
+      "experience"
+    ],
+    "typical_titles": [
+      "Data Scientist",
+      "Data Analyst",
+      "Senior Data Analyst",
+      "Data Engineer",
+      "Senior Data Scientist"
+    ]
+  },
+  {
+    "cluster_id": 26,
+    "name": "Data Engineering",
+    "description": "12 UK job postings in Data Engineering",
+    "size": 12,
+    "top_keywords": [
+      "data",
+      "engineer",
+      "data engineer",
+      "manchester",
+      "role",
+      "engineering",
+      "senior",
+      "senior data",
+      "manager",
+      "data engineering"
+    ],
+    "typical_titles": [
+      "Data Engineer",
+      "Senior Data Engineer",
+      "Full Stack Developer - Investment Banking - Perm - London",
+      "Head of Data Engineering",
+      "Data Engineering Manager - Manchester"
+    ]
+  },
+  {
+    "cluster_id": 14,
+    "name": "AI & Security Engineering",
+    "description": "10 UK job postings in Data Science / AI",
+    "size": 10,
+    "top_keywords": [
+      "ai",
+      "security",
+      "data",
+      "looking",
+      "talent acquisition",
+      "acquisition",
+      "talent",
+      "enterprise",
+      "development",
+      "operations"
+    ],
+    "typical_titles": [
+      "Software Development Engineer, Intelligent Talent Acquisition - Lead Generation & Detection Services",
+      "Applied Scientist, Intelligent Talent Acquisition - Lead Generation & Detection Services",
+      "Data Scientist / Senior Data Scientist",
+      "Data Scientist",
+      "Senior Security Solutions Expert"
+    ]
+  },
+  {
+    "cluster_id": 4,
+    "name": ".NET Full Stack",
+    "description": "10 UK job postings in DevOps & Cloud",
+    "size": 10,
+    "top_keywords": [
+      "net",
+      "developer",
+      "net developer",
+      "developer net",
+      "stack",
+      "10",
+      "core",
+      "azure",
+      "platform",
+      "net 10"
+    ],
+    "typical_titles": [
+      ".NET Developer",
+      "Full Stack Developer",
+      "Software Developer",
+      ".NET Developer - Manchester"
+    ]
+  }
+]

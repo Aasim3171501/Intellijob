@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: intellijob-backend
+    runtime: python
+    region: frankfurt  # EU region for UK jobs data
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120 --max-requests 1000 --max-requests-jitter 50"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.settings
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: USE_MARKET_PATHWAYS
+        value: "true"
+      # Add these in Render Dashboard → Environment:
+      # - ADZUNA_APP_ID
+      # - ADZUNA_APP_KEY
+      # - OLLAMA_API_KEY
+      # - OLLAMA_MODEL (gpt-oss:120b)
+      # - OLLAMA_BASE_URL (https://ollama.com/v1)
+      # - TAVILY_API_KEY
+      # - DJANGO_SECRET_KEY (generate: python -c "import secrets; print(secrets.token_urlsafe(50))")
+      # - ALLOWED_HOSTS (e.g. intellijob-backend.onrender.com,your-frontend.netlify.app)
+      # - CORS_ALLOWED_ORIGINS (e.g. https://your-frontend.netlify.app)
+    healthCheckPath: /api/analyze/
+    autoDeploy: true

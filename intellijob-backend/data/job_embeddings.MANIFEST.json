@@ -1,0 +1,17 @@
+{
+  "batch_size": 64,
+  "device": "cpu",
+  "elapsed_seconds": 17.578,
+  "embedder_schema_version": 1,
+  "embedding_dim": 384,
+  "generated_at_utc": "2026-07-27T14:27:25+00:00",
+  "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+  "npz_filename": "job_embeddings.npz",
+  "npz_sha256": "5d2ba81f3d4775d13e85117c3e1be3544ef9f865befb20268a39a401083cd218",
+  "rows_dropped": 0,
+  "rows_embedded": 1056,
+  "rows_in_csv": 1056,
+  "seed": 42,
+  "source_csv": "uk_software_jobs.csv",
+  "source_csv_sha256": "7dc2aed36eb0e198bad899a7d218605e82854ef22552cf527bcb3d51004d0d2e"
+}

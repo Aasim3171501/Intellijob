@@ -11,6 +11,13 @@ data/
 !package.json
 !package-lock.json
 !api/services/skills_gazetteer.json
+# Commit pre-built embeddings & clusters for Render free tier
+!data/job_embeddings.npz
+!data/uk_software_jobs.csv
+!data/job_embeddings.MANIFEST.json
+!data/MANIFEST.json
+!cache/market_clustering/clusters.pkl
+!cache/market_clustering/cluster_meta.json
 
 # Python
 __pycache__/
