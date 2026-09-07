@@ -19,6 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # 5. Copy requirements first to leverage Docker layer caching
 COPY requirements.txt .
 
+# Tell the compiler to treat incompatible pointer types as warnings, not fatal errors
+ENV CFLAGS="-Wno-incompatible-pointer-types"
+
 # 6. Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt gunicorn
