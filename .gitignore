@@ -13,6 +13,11 @@ intellijob-frontend/dist/
 .env
 .DS_Store
 
-dissertation.docx
-masters_porject_template.docx
-MScIT+25Sess4Dissertation-1.pdf
+# Dissertation and Word documents
+*.docx
+*.doc
+~$*
+
+# Research and sample folders
+Hall of fame/
+test_resumes/
