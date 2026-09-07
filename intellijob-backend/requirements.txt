@@ -27,7 +27,7 @@ markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
 murmurhash==1.0.15
-numpy==2.4.6
+numpy<2.0.0
 orjson==3.11.9
 ormsgpack==1.12.2
 packaging==26.2
