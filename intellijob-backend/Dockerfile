@@ -25,6 +25,7 @@ ENV CFLAGS="-Wno-incompatible-pointer-types"
 # 6. Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt gunicorn
+    python -m spacy download en_core_web_sm
 
 # 7. Copy the rest of your application code
 COPY . .
